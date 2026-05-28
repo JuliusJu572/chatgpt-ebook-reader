@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "ChatGPT eBook Reader",
+  "version": "1.0.0",
+  "description": "在 ChatGPT 界面中阅读电子书，内容以 ChatGPT 回复样式渲染",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "storage/db.js",
+        "content/shortcut.js",
+        "content/renderer.js",
+        "content/navigator.js",
+        "content/indicator.js",
+        "content/content.js"
+      ],
+      "css": [
+        "styles/chatgpt-mimic.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "lib/pdf.min.js",
+        "lib/pdf.worker.min.js",
+        "icons/*"
+      ],
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ]
+    }
+  ]
+}

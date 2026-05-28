@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatGPT eBook Reader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="popup-header">
+      <h1>📖 eBook Reader</h1>
+      <span class="popup-version">v1.0</span>
+    </header>
+
+    <!-- 标签页导航 -->
+    <nav class="popup-tabs">
+      <button class="tab-btn active" data-tab="upload">上传</button>
+      <button class="tab-btn" data-tab="bookshelf">书架</button>
+      <button class="tab-btn" data-tab="settings">设置</button>
+    </nav>
+
+    <!-- 上传标签页 -->
+    <div class="tab-content active" id="tab-upload">
+      <div class="upload-area" id="uploadArea">
+        <div class="upload-icon">📁</div>
+        <p>拖拽文件到此处或点击上传</p>
+        <p class="upload-hint">支持 PDF、EPUB、TXT</p>
+        <input type="file" id="fileInput" accept=".pdf,.epub,.txt" hidden>
+      </div>
+      <div class="upload-progress" id="uploadProgress" style="display:none">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p class="progress-text" id="progressText">解析中...</p>
+      </div>
+    </div>
+
+    <!-- 书架标签页 -->
+    <div class="tab-content" id="tab-bookshelf">
+      <div class="bookshelf" id="bookshelf">
+        <p class="empty-hint">暂无电子书，请先上传</p>
+      </div>
+    </div>
+
+    <!-- 设置标签页 -->
+    <div class="tab-content" id="tab-settings">
+      <div class="settings-group">
+        <label>每页字数</label>
+        <input type="number" id="charsPerPage" min="500" max="10000" step="100" value="2000">
+      </div>
+      <div class="settings-group">
+        <label>每批页数</label>
+        <input type="number" id="pagesPerBatch" min="1" max="50" step="1" value="10">
+      </div>
+
+      <div class="settings-divider"></div>
+      <h3>快捷键设置</h3>
+
+      <div class="settings-group">
+        <label>启用/禁用插件</label>
+        <div class="shortcut-input" id="shortcut-toggle" tabindex="0" data-action="toggle">
+          Alt + Shift + E
+        </div>
+      </div>
+      <div class="settings-group">
+        <label>下一批</label>
+        <div class="shortcut-input" id="shortcut-next" tabindex="0" data-action="next">
+          Alt + Shift + →
+        </div>
+      </div>
+      <div class="settings-group">
+        <label>上一批</label>
+        <div class="shortcut-input" id="shortcut-prev" tabindex="0" data-action="prev">
+          Alt + Shift + ←
+        </div>
+      </div>
+
+      <button class="save-btn" id="saveSettings">保存设置</button>
+    </div>
+
+    <!-- 状态栏 -->
+    <footer class="popup-footer">
+      <span id="statusText">就绪</span>
+    </footer>
+  </div>
+
+  <script src="../lib/pdf.min.js"></script>
+  <script src="../lib/jszip.min.js"></script>
+  <script src="../lib/parser.js"></script>
+  <script src="../storage/db.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

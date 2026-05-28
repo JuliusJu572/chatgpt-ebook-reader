@@ -1,0 +1,317 @@
+/* Popup 界面样式 */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 360px;
+  min-height: 480px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #1e1e1e;
+  color: #d1d5db;
+}
+
+.popup-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+}
+
+/* ====== Header ====== */
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.popup-header h1 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.popup-version {
+  font-size: 11px;
+  color: #8e8ea0;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* ====== Tabs ====== */
+.popup-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0 12px;
+}
+
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #8e8ea0;
+  padding: 12px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: #d1d5db;
+}
+
+.tab-btn.active {
+  color: #10a37f;
+  border-bottom-color: #10a37f;
+}
+
+/* ====== Tab Content ====== */
+.tab-content {
+  display: none;
+  flex: 1;
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* ====== Upload ====== */
+.upload-area {
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.upload-area:hover,
+.upload-area.drag-over {
+  border-color: #10a37f;
+  background: rgba(16, 163, 127, 0.05);
+}
+
+.upload-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.upload-area p {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.upload-hint {
+  font-size: 12px !important;
+  color: #8e8ea0;
+}
+
+.upload-progress {
+  margin-top: 16px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #10a37f, #1a7f64);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #8e8ea0;
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* ====== Bookshelf ====== */
+.bookshelf {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty-hint {
+  text-align: center;
+  color: #8e8ea0;
+  font-size: 13px;
+  padding: 40px 0;
+}
+
+.book-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.book-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.book-item.active {
+  background: rgba(16, 163, 127, 0.12);
+  border: 1px solid rgba(16, 163, 127, 0.3);
+}
+
+.book-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.book-title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.book-meta {
+  font-size: 11px;
+  color: #8e8ea0;
+  margin-top: 2px;
+}
+
+.book-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.book-btn {
+  background: none;
+  border: none;
+  color: #8e8ea0;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.book-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #d1d5db;
+}
+
+.book-btn.delete:hover {
+  color: #ef4444;
+}
+
+/* ====== Settings ====== */
+.settings-group {
+  margin-bottom: 16px;
+}
+
+.settings-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: #9ca3af;
+}
+
+.settings-group input[type="number"] {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #d1d5db;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.settings-group input[type="number"]:focus {
+  border-color: #10a37f;
+}
+
+.settings-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 20px 0;
+}
+
+.tab-content h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #d1d5db;
+}
+
+.shortcut-input {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  font-size: 13px;
+  color: #d1d5db;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.shortcut-input:focus {
+  border-color: #10a37f;
+  background: rgba(16, 163, 127, 0.08);
+  outline: none;
+}
+
+.shortcut-input.recording {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.7; }
+}
+
+.save-btn {
+  width: 100%;
+  padding: 10px;
+  background: #10a37f;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-top: 8px;
+}
+
+.save-btn:hover {
+  background: #0d8c6d;
+}
+
+/* ====== Footer ====== */
+.popup-footer {
+  padding: 10px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: #8e8ea0;
+  text-align: center;
+}
