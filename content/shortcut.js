@@ -39,10 +39,6 @@ const ShortcutManager = (() => {
       event.preventDefault();
       event.stopPropagation();
       if (handlers.prev) handlers.prev();
-    } else if (matchesShortcut(event, shortcuts.jumpBookmark)) {
-      event.preventDefault();
-      event.stopPropagation();
-      if (handlers.jumpBookmark) handlers.jumpBookmark();
     }
   }
 

@@ -7,6 +7,7 @@ const Indicator = (() => {
   const INDICATOR_ID = 'ebook-reader-indicator';
   let indicatorEl = null;
   let messageTimeout = null;
+  let _onJumpBookmark = null;
 
   function create() {
     if (document.getElementById(INDICATOR_ID)) {
@@ -21,7 +22,8 @@ const Indicator = (() => {
       <div class="ebook-indicator-header">
         <span class="ebook-indicator-icon">📖</span>
         <span class="ebook-indicator-title">未加载书籍</span>
-        <button class="ebook-indicator-close" title="隐藏">×</button>
+        <button class="ebook-indicator-bookmark" title="跳转到下一个书签">🔖</button>
+        <button class="ebook-indicator-close" title="最小化">×</button>
       </div>
       <div class="ebook-indicator-progress">
         <span class="ebook-indicator-pages">-</span>
@@ -34,10 +36,19 @@ const Indicator = (() => {
     `;
     document.body.appendChild(indicatorEl);
 
-    // 关闭按钮
+    // 最小化按钮
     indicatorEl.querySelector('.ebook-indicator-close').addEventListener('click', () => {
       indicatorEl.classList.toggle('ebook-indicator-minimized');
     });
+
+    // 书签跳转按钮
+    indicatorEl.querySelector('.ebook-indicator-bookmark').addEventListener('click', () => {
+      if (_onJumpBookmark) _onJumpBookmark();
+    });
+  }
+
+  function setOnJumpBookmark(fn) {
+    _onJumpBookmark = fn;
   }
 
   function update(data) {
@@ -92,5 +103,5 @@ const Indicator = (() => {
     }
   }
 
-  return { create, update, setEnabled, showMessage, show, hide, destroy };
+  return { create, update, setEnabled, showMessage, show, hide, destroy, setOnJumpBookmark };
 })();

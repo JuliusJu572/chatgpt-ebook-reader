@@ -81,13 +81,13 @@
     Navigator.prevBatch();
   });
 
-  ShortcutManager.on('jumpBookmark', async () => {
+  // 书签跳转按钮（悬浮窗中）
+  Indicator.setOnJumpBookmark(async () => {
     const state = Navigator.getState();
     if (!state.hasBook) {
       Indicator.showMessage('请先在插件中上传电子书');
       return;
     }
-    // 查找当前可见页范围之后的下一个书签
     const lastVisiblePage = state.batchIndex * settings.pagesPerBatch + settings.pagesPerBatch - 1;
     const next = await Bookmarks.findNext(state.bookId, lastVisiblePage);
     if (!next) {
