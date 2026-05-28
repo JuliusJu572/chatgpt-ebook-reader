@@ -37,7 +37,7 @@
         Navigator.renderCurrent();
         Renderer.setupObserver(() => {
           if (settings.enabled && Navigator.getState().hasBook) {
-            Navigator.renderCurrent(false);
+            Navigator.renderCurrent();
           }
         });
       }
@@ -81,7 +81,7 @@
             Navigator.renderCurrent();
             Renderer.setupObserver(() => {
               if (settings.enabled && Navigator.getState().hasBook) {
-                Navigator.renderCurrent(false); // observer 重建不滚动
+                Navigator.renderCurrent(); // observer 重建不滚动
               }
             });
           }, 2000);
@@ -117,7 +117,7 @@
               Navigator.renderCurrent();
               Renderer.setupObserver(() => {
                 if (settings.enabled && Navigator.getState().hasBook) {
-                  Navigator.renderCurrent(false);
+                  Navigator.renderCurrent();
                 }
               });
             }

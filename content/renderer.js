@@ -114,7 +114,7 @@ const Renderer = (() => {
   }
 
   // 渲染一批页面到聊天区域
-  function renderBatch(pages, startPage, totalPages, bookTitle, shouldScroll = true) {
+  function renderBatch(pages, startPage, totalPages, bookTitle) {
     isRendering = true;
 
     // 先移除旧内容
@@ -153,15 +153,10 @@ const Renderer = (() => {
     footer.textContent = `显示第 ${startPage + 1}-${endPage} 页 | 使用快捷键翻页`;
     container.appendChild(footer);
 
-    // 插入到聊天容器的最前面（而不是最后面）
-    chatContainer.prepend(container);
+    // 插入到聊天容器底部（像 ChatGPT 新回复一样）
+    chatContainer.appendChild(container);
 
-    // 滚动到内容顶部
-    if (shouldScroll) {
-      requestAnimationFrame(() => {
-        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
+    // 不自动滚动 — 用户自己往下阅读（类似 ChatGPT 回复了长消息）
 
     // 延迟解除渲染锁，避免 observer 误触发
     setTimeout(() => { isRendering = false; }, 300);

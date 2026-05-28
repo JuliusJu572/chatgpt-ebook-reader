@@ -40,7 +40,7 @@ const Navigator = (() => {
     };
   }
 
-  function renderCurrent(shouldScroll = true) {
+  function renderCurrent() {
     const data = getCurrentPages();
     if (!data) return false;
 
@@ -48,8 +48,7 @@ const Navigator = (() => {
       data.pages,
       data.startPage,
       data.totalPages,
-      currentBook.title,
-      shouldScroll
+      currentBook.title
     );
 
     if (success) {
