@@ -1,19 +1,65 @@
 /**
  * ChatGPT 聊天区域渲染引擎
- * 
- * 核心策略：不往 ChatGPT 的聊天消息容器里注入内容（会触发 react-scroll-to-bottom 的
- * 自动滚动，导致滚动冲突），而是在 <main> 内创建独立的覆盖层，有自己的滚动逻辑。
+ *
+ * 策略：注入到 ChatGPT 聊天容器底部（看起来像新消息），同时通过
+ * 滚动锁定机制阻止 react-scroll-to-bottom 的自动滚动。
  */
 
 const Renderer = (() => {
   const CONTAINER_ID = 'ebook-reader-container';
-  const OVERLAY_ID = 'ebook-reader-overlay';
 
-  // 简易 Markdown → HTML 转换
+  // ===== DOM 查找 =====
+
+  // 找到 ChatGPT 的可滚动容器
+  function findScrollContainer() {
+    const selectors = [
+      'div[class*="react-scroll-to-bottom"] > div',
+      'main .overflow-y-auto',
+      'main div[class*="overflow-y-auto"]',
+    ];
+    for (const sel of selectors) {
+      const els = document.querySelectorAll(sel);
+      for (const el of els) {
+        const cs = window.getComputedStyle(el);
+        if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') &&
+            el.scrollHeight > el.clientHeight + 10) {
+          return el;
+        }
+      }
+    }
+    // 兜底：在 main 内寻找最大的可滚动元素
+    const main = document.querySelector('main');
+    if (!main) return null;
+    let best = null, bestH = 0;
+    for (const el of main.querySelectorAll('div')) {
+      const cs = window.getComputedStyle(el);
+      if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') &&
+          el.scrollHeight > el.clientHeight + 10 &&
+          el.scrollHeight > bestH) {
+        best = el;
+        bestH = el.scrollHeight;
+      }
+    }
+    return best;
+  }
+
+  // 找到消息列表容器（scroll container 的直接子级 flex-col）
+  function findChatContainer() {
+    const sc = findScrollContainer();
+    if (sc) {
+      return sc.querySelector(':scope > .flex.flex-col')
+          || sc.querySelector('.flex.flex-col')
+          || sc;
+    }
+    return document.querySelector('main');
+  }
+
+  // ===== Markdown → HTML =====
+
   function markdownToHtml(text) {
     let html = escapeHtml(text);
 
-    // 标题（必须在行首）
+    // 标题
     html = html.replace(/^###### (.+)$/gm, '<h6>$1</h6>');
     html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
     html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -21,145 +67,162 @@ const Renderer = (() => {
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
     html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-    // 粗体和斜体
+    // 粗体、斜体
     html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-    // 无序列表项
+    // 列表
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-
-    // 有序列表项
     html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
-    // 引用块
+    // 引用
     html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
     // 分隔线
     html = html.replace(/^---$/gm, '<hr>');
 
-    // 段落：将连续非标签行包裹为 <p>
+    // 段落包裹
     const lines = html.split('\n');
     const result = [];
-    let inParagraph = false;
-
+    let inP = false;
     for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        if (inParagraph) { result.push('</p>'); inParagraph = false; }
+      const t = line.trim();
+      if (!t) {
+        if (inP) { result.push('</p>'); inP = false; }
         continue;
       }
-      if (/^<(h[1-6]|li|blockquote|hr)/.test(trimmed)) {
-        if (inParagraph) { result.push('</p>'); inParagraph = false; }
-        result.push(trimmed);
+      if (/^<(h[1-6]|li|blockquote|hr)/.test(t)) {
+        if (inP) { result.push('</p>'); inP = false; }
+        result.push(t);
       } else {
-        if (!inParagraph) { result.push('<p>'); inParagraph = true; }
-        result.push(trimmed);
+        if (!inP) { result.push('<p>'); inP = true; }
+        result.push(t);
       }
     }
-    if (inParagraph) result.push('</p>');
-
+    if (inP) result.push('</p>');
     return result.join('\n');
   }
 
-  // 创建电子书内容的消息气泡
-  function createMessageBubble(content, pageInfo) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'ebook-message-wrapper';
-
-    const header = document.createElement('div');
-    header.className = 'ebook-page-header';
-    header.textContent = pageInfo;
-    wrapper.appendChild(header);
-
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'ebook-message-content';
-    contentDiv.innerHTML = markdownToHtml(content);
-
-    wrapper.appendChild(contentDiv);
-    return wrapper;
+  function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
   }
 
-  // 获取或创建覆盖层（独立于 ChatGPT 的滚动容器）
-  function getOrCreateOverlay() {
-    let overlay = document.getElementById(OVERLAY_ID);
-    if (overlay) return overlay;
+  // ===== 消息气泡 =====
 
-    // 找到 <main> 元素作为定位参考
-    const main = document.querySelector('main');
-    if (!main) return null;
+  function createBubble(content, pageInfo) {
+    const w = document.createElement('div');
+    w.className = 'ebook-message-wrapper';
 
-    // 确保 main 有定位上下文
-    const mainPosition = window.getComputedStyle(main).position;
-    if (mainPosition === 'static') {
-      main.style.position = 'relative';
+    const h = document.createElement('div');
+    h.className = 'ebook-page-header';
+    h.textContent = pageInfo;
+    w.appendChild(h);
+
+    const c = document.createElement('div');
+    c.className = 'ebook-message-content';
+    c.innerHTML = markdownToHtml(content);
+    w.appendChild(c);
+    return w;
+  }
+
+  // ===== 滚动锁定 =====
+  // 在内容注入期间冻结滚动位置，防止 react-scroll-to-bottom 自动滚到底部。
+  // 用户主动滚动（wheel/touch）时立即解锁。
+
+  function withScrollLock(scrollContainer, fn) {
+    if (!scrollContainer) { fn(); return; }
+
+    const savedTop = scrollContainer.scrollTop;
+    let locked = true;
+
+    // 用户主动滚动时立即解锁
+    const unlock = () => { locked = false; cleanup(); };
+    scrollContainer.addEventListener('wheel', unlock, { once: true, passive: true });
+    scrollContainer.addEventListener('touchmove', unlock, { once: true, passive: true });
+
+    // 冻结 scrollTop setter 和 scrollTo/scroll 方法
+    const proto = Element.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'scrollTop');
+
+    if (desc && desc.set) {
+      Object.defineProperty(scrollContainer, 'scrollTop', {
+        get() { return desc.get.call(this); },
+        set(v) { if (!locked) desc.set.call(this, v); },
+        configurable: true,
+      });
     }
+    const origScrollTo = scrollContainer.scrollTo;
+    const origScroll = scrollContainer.scroll;
+    scrollContainer.scrollTo = function(...a) { if (!locked) origScrollTo.apply(this, a); };
+    scrollContainer.scroll = function(...a) { if (!locked) origScroll.apply(this, a); };
 
-    overlay = document.createElement('div');
-    overlay.id = OVERLAY_ID;
-    overlay.className = 'ebook-overlay';
-    main.appendChild(overlay);
+    // 执行注入
+    fn();
 
-    return overlay;
+    // 1.5 秒后自动解锁
+    const timer = setTimeout(() => { locked = false; cleanup(); }, 1500);
+
+    function cleanup() {
+      clearTimeout(timer);
+      if (desc && desc.set) delete scrollContainer.scrollTop;
+      scrollContainer.scrollTo = origScrollTo;
+      scrollContainer.scroll = origScroll;
+      scrollContainer.removeEventListener('wheel', unlock);
+      scrollContainer.removeEventListener('touchmove', unlock);
+      // 恢复到注入前的位置
+      try { desc.set.call(scrollContainer, savedTop); } catch (_) {}
+    }
   }
 
-  // 清除渲染内容并移除覆盖层
+  // ===== 渲染 =====
+
   function clearRendered() {
-    const overlay = document.getElementById(OVERLAY_ID);
-    if (overlay) overlay.remove();
+    const el = document.getElementById(CONTAINER_ID);
+    if (el) el.remove();
   }
 
-  // 渲染一批页面
   function renderBatch(pages, startPage, totalPages, bookTitle) {
-    // 移除旧覆盖层
     clearRendered();
 
-    const overlay = getOrCreateOverlay();
-    if (!overlay) {
-      console.warn('[eBook Reader] 无法找到 main 容器');
+    const chatContainer = findChatContainer();
+    if (!chatContainer) {
+      console.warn('[eBook Reader] 无法找到 ChatGPT 聊天容器');
       return false;
     }
 
+    // 构建内容
     const container = document.createElement('div');
     container.id = CONTAINER_ID;
     container.className = 'ebook-reader-section';
 
-    // 书籍标题
     const divider = document.createElement('div');
     divider.className = 'ebook-divider';
     divider.innerHTML = `<span>📖 ${escapeHtml(bookTitle)}</span>`;
     container.appendChild(divider);
 
-    // 渲染每一页
-    pages.forEach((pageContent, index) => {
-      const pageNum = startPage + index + 1;
-      const pageInfo = `第 ${pageNum} 页 / 共 ${totalPages} 页`;
-      const bubble = createMessageBubble(pageContent, pageInfo);
-      container.appendChild(bubble);
+    pages.forEach((pageContent, idx) => {
+      const num = startPage + idx + 1;
+      container.appendChild(createBubble(pageContent, `第 ${num} 页 / 共 ${totalPages} 页`));
     });
 
-    // 底部导航提示
     const footer = document.createElement('div');
     footer.className = 'ebook-nav-hint';
     const endPage = Math.min(startPage + pages.length, totalPages);
     footer.textContent = `显示第 ${startPage + 1}-${endPage} 页 | 使用快捷键翻页`;
     container.appendChild(footer);
 
-    overlay.appendChild(container);
-
-    // 滚动到覆盖层顶部
-    overlay.scrollTop = 0;
+    // 在滚动锁定保护下注入到聊天底部
+    const scrollContainer = findScrollContainer();
+    withScrollLock(scrollContainer, () => {
+      chatContainer.appendChild(container);
+    });
 
     return true;
   }
 
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  // 不再需要 MutationObserver — 覆盖层在 main 内独立存在，不会被 React 移除
   function setupObserver() {}
   function destroyObserver() {}
 

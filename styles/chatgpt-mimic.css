@@ -1,42 +1,9 @@
 /* 模拟 ChatGPT 回复消息的样式 */
 
-/* ====== 覆盖层 — 独立于 ChatGPT 滚动容器 ====== */
-.ebook-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  z-index: 999;
-  /* 直接使用 ChatGPT 的 CSS 变量，自动跟随暗色/亮色主题 */
-  background: var(--main-surface-primary, #212121);
-  color: var(--text-primary, #d1d5db);
-  overscroll-behavior: contain;
-}
-
-/* 覆盖层滚动条 */
-.ebook-overlay::-webkit-scrollbar {
-  width: 6px;
-}
-.ebook-overlay::-webkit-scrollbar-track {
-  background: transparent;
-}
-.ebook-overlay::-webkit-scrollbar-thumb {
-  background: var(--text-quaternary, rgba(255, 255, 255, 0.15));
-  border-radius: 3px;
-}
-.ebook-overlay::-webkit-scrollbar-thumb:hover {
-  background: var(--text-tertiary, rgba(255, 255, 255, 0.25));
-}
-
 /* ====== 电子书内容区域 ====== */
 .ebook-reader-section {
   width: 100%;
-  padding: 16px 24px;
-  max-width: 48rem;
-  margin: 0 auto;
+  padding: 16px 0;
 }
 
 .ebook-divider {
