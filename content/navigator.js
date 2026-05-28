@@ -3,9 +3,11 @@
  */
 
 const Navigator = (() => {
-  let currentBook = null;     // 当前加载的书籍数据
-  let batchIndex = 0;         // 当前批次索引（从 0 开始）
-  let pagesPerBatch = 10;     // 每批页数
+  let currentBook = null;
+  let batchIndex = 0;
+  let pagesPerBatch = 10;
+  let _onRender = null;       // 渲染后回调（用于应用书签高亮）
+  let _pendingBookmark = null; // 跳转书签时暂存目标段落
 
   function setBook(book) {
     currentBook = book;
@@ -18,6 +20,10 @@ const Navigator = (() => {
 
   function setBatchIndex(index) {
     batchIndex = index;
+  }
+
+  function setOnRender(fn) {
+    _onRender = fn;
   }
 
   function getTotalBatches() {
@@ -44,15 +50,19 @@ const Navigator = (() => {
     const data = getCurrentPages();
     if (!data) return false;
 
+    // 取出并清空待跳转书签
+    const bookmark = _pendingBookmark;
+    _pendingBookmark = null;
+
     const success = Renderer.renderBatch(
       data.pages,
       data.startPage,
       data.totalPages,
-      currentBook.title
+      currentBook.title,
+      bookmark // 传给 renderer 用于渲染后滚动
     );
 
     if (success) {
-      // 更新指示器
       Indicator.update({
         title: currentBook.title,
         currentPage: data.startPage + 1,
@@ -62,11 +72,12 @@ const Navigator = (() => {
         totalBatches: data.totalBatches
       });
 
-      // 保存进度
       ReadingProgress.set({
         bookId: currentBook.id,
         batchIndex: batchIndex
       });
+
+      if (_onRender) _onRender();
     }
 
     return success;
@@ -109,5 +120,20 @@ const Navigator = (() => {
     return renderCurrent();
   }
 
-  return { setBook, setConfig, setBatchIndex, getCurrentPages, renderCurrent, nextBatch, prevBatch, getState, jumpToBatch };
+  // 跳转到书签所在的页面和段落
+  function jumpToBookmark(pageIndex, paragraphIndex) {
+    if (!currentBook) return false;
+    if (pageIndex < 0 || pageIndex >= currentBook.pages.length) return false;
+    const targetBatch = Math.floor(pageIndex / pagesPerBatch);
+    _pendingBookmark = { pageIndex, paragraphIndex };
+    batchIndex = targetBatch;
+    return renderCurrent();
+  }
+
+  return {
+    setBook, setConfig, setBatchIndex, setOnRender,
+    getCurrentPages, renderCurrent,
+    nextBatch, prevBatch, getState,
+    jumpToBatch, jumpToBookmark
+  };
 })();

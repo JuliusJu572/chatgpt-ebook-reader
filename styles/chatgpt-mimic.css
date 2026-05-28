@@ -250,3 +250,63 @@
 /* 主题自动跟随：所有颜色均使用 ChatGPT 的 CSS 变量（如 --main-surface-primary、
    --text-primary、--border-light 等），无需单独的暗色/亮色覆写规则。
    ChatGPT 切换主题时变量值自动变化，插件 UI 随之更新。 */
+
+/* ====== 段落级书签 ====== */
+.ebook-para {
+  position: relative;
+  transition: background-color 0.2s, border-left-color 0.2s;
+  padding-left: 24px;
+  margin-left: -24px;
+}
+
+.ebook-bookmark-icon {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  opacity: 0;
+  cursor: pointer;
+  user-select: none;
+  z-index: 1;
+  transition: opacity 0.15s;
+  filter: grayscale(1);
+}
+
+.ebook-para:hover .ebook-bookmark-icon {
+  opacity: 0.5;
+}
+
+.ebook-para:hover .ebook-bookmark-icon:hover {
+  opacity: 1;
+  filter: none;
+  transform: scale(1.2);
+}
+
+/* 已添加书签的段落 */
+.ebook-para.ebook-bookmarked {
+  border-left: 3px solid #10a37f;
+  padding-left: 21px;
+  background: rgba(16, 163, 127, 0.06);
+  border-radius: 0 4px 4px 0;
+}
+
+.ebook-para.ebook-bookmarked .ebook-bookmark-icon {
+  opacity: 1;
+  filter: none;
+}
+
+/* 跳转时的闪烁高亮 */
+.ebook-bookmark-flash {
+  animation: ebook-bookmark-pulse 2s ease;
+}
+
+@keyframes ebook-bookmark-pulse {
+  0%   { background-color: rgba(16, 163, 127, 0.25); }
+  50%  { background-color: rgba(16, 163, 127, 0.1); }
+  100% { background-color: transparent; }
+}

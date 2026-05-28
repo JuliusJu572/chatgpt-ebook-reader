@@ -82,8 +82,7 @@ chrome.runtime.onInstalled.addListener((details) => {
           toggle: { alt: true, shift: true, key: 'e' },
           next: { alt: true, shift: true, key: 'ArrowRight' },
           prev: { alt: true, shift: true, key: 'ArrowLeft' },
-          bookmark: { alt: true, shift: true, key: 'b' },
-          jumpBookmark: { alt: true, shift: true, key: 'j' }
+          jumpBookmark: { alt: true, shift: true, key: 'n' }
         }
       }
     });

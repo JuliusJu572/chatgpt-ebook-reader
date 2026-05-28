@@ -19,7 +19,35 @@
   // 配置导航器
   Navigator.setConfig({ pagesPerBatch: settings.pagesPerBatch });
 
-  // 快捷键处理器
+  // 渲染后自动应用书签高亮
+  Navigator.setOnRender(async () => {
+    const state = Navigator.getState();
+    if (state.bookId) {
+      const bookmarks = await Bookmarks.getAll(state.bookId);
+      Renderer.applyBookmarks(bookmarks);
+    }
+  });
+
+  // 书签图标点击回调
+  Renderer.setBookmarkCallback(async (pageIndex, paragraphIndex, preview, paraElement) => {
+    const state = Navigator.getState();
+    if (!state.bookId) return;
+    const added = await Bookmarks.toggle(state.bookId, pageIndex, paragraphIndex, preview);
+    if (added) {
+      paraElement.classList.add('ebook-bookmarked');
+      const icon = paraElement.querySelector('.ebook-bookmark-icon');
+      if (icon) icon.title = '移除书签';
+      Indicator.showMessage(`🔖 已添加书签`);
+    } else {
+      paraElement.classList.remove('ebook-bookmarked');
+      const icon = paraElement.querySelector('.ebook-bookmark-icon');
+      if (icon) icon.title = '添加书签';
+      Indicator.showMessage(`❌ 已移除书签`);
+    }
+  });
+
+  // ===== 快捷键处理器 =====
+
   ShortcutManager.on('toggle', async () => {
     settings.enabled = !settings.enabled;
     await Settings.set({ enabled: settings.enabled });
@@ -53,41 +81,27 @@
     Navigator.prevBatch();
   });
 
-  ShortcutManager.on('bookmark', async () => {
-    const state = Navigator.getState();
-    if (!state.hasBook) {
-      Indicator.showMessage('请先在插件中上传电子书');
-      return;
-    }
-    const label = `第 ${state.batchIndex * settings.pagesPerBatch + 1} 页`;
-    const added = await Bookmarks.toggle(state.bookId, state.batchIndex, label);
-    if (added) {
-      Indicator.showMessage(`🔖 已添加书签 (批次 ${state.batchIndex + 1})`);
-    } else {
-      Indicator.showMessage(`❌ 已移除书签 (批次 ${state.batchIndex + 1})`);
-    }
-  });
-
   ShortcutManager.on('jumpBookmark', async () => {
     const state = Navigator.getState();
     if (!state.hasBook) {
       Indicator.showMessage('请先在插件中上传电子书');
       return;
     }
-    const next = await Bookmarks.findNext(state.bookId, state.batchIndex);
+    // 查找当前可见页范围之后的下一个书签
+    const lastVisiblePage = state.batchIndex * settings.pagesPerBatch + settings.pagesPerBatch - 1;
+    const next = await Bookmarks.findNext(state.bookId, lastVisiblePage);
     if (!next) {
-      Indicator.showMessage('📭 没有书签，按 Alt+Shift+B 添加');
+      Indicator.showMessage('📭 没有书签，hover 段落点击 🔖 添加');
       return;
     }
-    Navigator.jumpToBatch(next.batchIndex);
-    Indicator.showMessage(`🔖 跳转到书签: ${next.label}`);
+    Navigator.jumpToBookmark(next.pageIndex, next.paragraphIndex);
+    Indicator.showMessage(`🔖 跳转到书签: ${next.preview || '第' + (next.pageIndex + 1) + '页'}`);
   });
 
-  // 尝试恢复上次阅读进度
+  // ===== 恢复阅读进度 =====
   const progress = await ReadingProgress.get();
   if (progress && progress.bookId) {
     try {
-      // 通过 service worker 获取书籍数据
       const resp = await new Promise(resolve => {
         chrome.runtime.sendMessage(
           { type: 'GET_BOOK_FOR_CONTENT', bookId: progress.bookId },
@@ -99,7 +113,6 @@
         Navigator.setBook(book);
         Navigator.setBatchIndex(progress.batchIndex || 0);
         if (settings.enabled) {
-          // 等待 ChatGPT 页面完全加载后渲染
           setTimeout(() => {
             Navigator.renderCurrent();
           }, 2000);
@@ -111,17 +124,16 @@
     }
   }
 
-  // 监听来自 popup 的消息
+  // ===== 消息监听 =====
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleMessage(message, sendResponse);
-    return true; // 异步 sendResponse
+    return true;
   });
 
   async function handleMessage(message, sendResponse) {
     try {
       switch (message.type) {
         case 'LOAD_BOOK': {
-          // 通过 service worker 获取书籍数据
           const resp = await new Promise(resolve => {
             chrome.runtime.sendMessage(
               { type: 'GET_BOOK_FOR_CONTENT', bookId: message.bookId },
@@ -156,8 +168,8 @@
             sendResponse({ success: false, error: '未加载书籍' });
             break;
           }
-          Navigator.jumpToBatch(message.batchIndex);
-          Indicator.showMessage(`🔖 跳转到批次 ${message.batchIndex + 1}`);
+          Navigator.jumpToBookmark(message.pageIndex, message.paragraphIndex);
+          Indicator.showMessage(`🔖 跳转到书签`);
           sendResponse({ success: true });
           break;
         }
@@ -174,7 +186,6 @@
         }
 
         case 'REPARSE_BOOK': {
-          // 通过 service worker 获取书籍数据
           const rResp = await new Promise(resolve => {
             chrome.runtime.sendMessage(
               { type: 'GET_BOOK_FOR_CONTENT', bookId: message.bookId },
@@ -185,7 +196,6 @@
             const rBook = rResp.book;
             rBook.pages = splitIntoPages(rBook.rawText, message.charsPerPage);
             rBook.totalPages = rBook.pages.length;
-            // 保存更新后的书籍（通过 service worker）
             await new Promise(resolve => {
               chrome.runtime.sendMessage({ type: 'DB_SAVE_BOOK', book: rBook }, resolve);
             });
@@ -210,7 +220,7 @@
     }
   }
 
-  // 监听 storage 变化以同步设置
+  // 监听 storage 变化同步设置
   chrome.storage.onChanged.addListener((changes) => {
     if (changes.settings) {
       settings = changes.settings.newValue;
@@ -229,7 +239,6 @@ function splitIntoPages(text, charsPerPage) {
   let i = 0;
   while (i < text.length) {
     let end = Math.min(i + charsPerPage, text.length);
-    // 尽量在段落或句子边界分割
     if (end < text.length) {
       const slice = text.substring(i, end);
       const lastPara = slice.lastIndexOf('\n\n');

@@ -292,27 +292,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     section.style.display = 'block';
     list.innerHTML = bookmarks.map(bm => `
-      <div class="bookmark-item" data-batch="${bm.batchIndex}">
-        <span class="bookmark-label">🔖 ${escapeHtml(bm.label)}</span>
+      <div class="bookmark-item" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}">
+        <div class="bookmark-info">
+          <span class="bookmark-label">🔖 第 ${bm.pageIndex + 1} 页</span>
+          <span class="bookmark-preview">${escapeHtml((bm.preview || '').substring(0, 40))}</span>
+        </div>
         <div class="bookmark-actions">
-          <button class="book-btn jump" title="跳转" data-batch="${bm.batchIndex}">📖</button>
-          <button class="book-btn del-bm" title="删除" data-batch="${bm.batchIndex}">✕</button>
+          <button class="book-btn jump" title="跳转" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}">📖</button>
+          <button class="book-btn del-bm" title="删除" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}">✕</button>
         </div>
       </div>
     `).join('');
 
     list.querySelectorAll('.book-btn.jump').forEach(btn => {
       btn.addEventListener('click', () => {
-        const batch = parseInt(btn.dataset.batch);
-        sendToContent({ type: 'JUMP_BOOKMARK', batchIndex: batch });
-        setStatus(`跳转到批次 ${batch + 1}`);
+        const pageIndex = parseInt(btn.dataset.page);
+        const paragraphIndex = parseInt(btn.dataset.para);
+        sendToContent({ type: 'JUMP_BOOKMARK', pageIndex, paragraphIndex });
+        setStatus(`跳转到第 ${pageIndex + 1} 页`);
       });
     });
 
     list.querySelectorAll('.book-btn.del-bm').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const batch = parseInt(btn.dataset.batch);
-        await Bookmarks.remove(progress.bookId, batch);
+        const pageIndex = parseInt(btn.dataset.page);
+        const paragraphIndex = parseInt(btn.dataset.para);
+        await Bookmarks.remove(progress.bookId, pageIndex, paragraphIndex);
         await loadBookmarks();
         setStatus('书签已删除');
       });

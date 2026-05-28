@@ -369,10 +369,26 @@ body {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.bookmark-label {
+.bookmark-info {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bookmark-label {
   font-size: 12px;
+  font-weight: 600;
   color: #d1d5db;
+}
+
+.bookmark-preview {
+  font-size: 11px;
+  color: #8e8ea0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bookmark-actions {

@@ -3,14 +3,15 @@
  *
  * 策略：注入到 ChatGPT 聊天容器底部（看起来像新消息），同时通过
  * 滚动锁定机制阻止 react-scroll-to-bottom 的自动滚动。
+ * 支持段落级书签（悬浮图标点击添加/移除）。
  */
 
 const Renderer = (() => {
   const CONTAINER_ID = 'ebook-reader-container';
+  let _onBookmarkToggle = null; // 书签切换回调
 
   // ===== DOM 查找 =====
 
-  // 找到 ChatGPT 的可滚动容器
   function findScrollContainer() {
     const selectors = [
       'div[class*="react-scroll-to-bottom"] > div',
@@ -27,7 +28,6 @@ const Renderer = (() => {
         }
       }
     }
-    // 兜底：在 main 内寻找最大的可滚动元素
     const main = document.querySelector('main');
     if (!main) return null;
     let best = null, bestH = 0;
@@ -43,7 +43,6 @@ const Renderer = (() => {
     return best;
   }
 
-  // 找到消息列表容器（scroll container 的直接子级 flex-col）
   function findChatContainer() {
     const sc = findScrollContainer();
     if (sc) {
@@ -59,7 +58,7 @@ const Renderer = (() => {
   function markdownToHtml(text) {
     let html = escapeHtml(text);
 
-    // 标题
+    // 标题（从 h6 到 h1 避免 ## 被 # 先匹配）
     html = html.replace(/^###### (.+)$/gm, '<h6>$1</h6>');
     html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
     html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
@@ -112,7 +111,7 @@ const Renderer = (() => {
 
   // ===== 消息气泡 =====
 
-  function createBubble(content, pageInfo) {
+  function createBubble(content, pageInfo, pageIndex) {
     const w = document.createElement('div');
     w.className = 'ebook-message-wrapper';
 
@@ -124,26 +123,82 @@ const Renderer = (() => {
     const c = document.createElement('div');
     c.className = 'ebook-message-content';
     c.innerHTML = markdownToHtml(content);
+
+    // 为每个块级元素添加段落标识和书签图标
+    let paraIdx = 0;
+    for (const child of Array.from(c.children)) {
+      if (child.tagName === 'HR') continue;
+      child.classList.add('ebook-para');
+      child.dataset.ebookPage = pageIndex;
+      child.dataset.ebookPara = paraIdx;
+      // 书签图标（hover 时显示）
+      const icon = document.createElement('span');
+      icon.className = 'ebook-bookmark-icon';
+      icon.textContent = '🔖';
+      icon.title = '添加书签';
+      child.prepend(icon);
+      paraIdx++;
+    }
+
     w.appendChild(c);
     return w;
   }
 
-  // ===== 滚动锁定 =====
-  // 在内容注入期间冻结滚动位置，防止 react-scroll-to-bottom 自动滚到底部。
-  // 用户主动滚动（wheel/touch）时立即解锁。
+  // ===== 书签 =====
 
-  function withScrollLock(scrollContainer, fn, scrollTarget) {
+  function setBookmarkCallback(fn) {
+    _onBookmarkToggle = fn;
+  }
+
+  // 高亮已有书签的段落
+  function applyBookmarks(bookmarks) {
+    const container = document.getElementById(CONTAINER_ID);
+    if (!container) return;
+    // 清除旧的高亮
+    container.querySelectorAll('.ebook-bookmarked').forEach(el => {
+      el.classList.remove('ebook-bookmarked');
+      const icon = el.querySelector('.ebook-bookmark-icon');
+      if (icon) icon.title = '添加书签';
+    });
+    // 应用书签
+    for (const bm of bookmarks) {
+      const el = container.querySelector(
+        `[data-ebook-page="${bm.pageIndex}"][data-ebook-para="${bm.paragraphIndex}"]`
+      );
+      if (el) {
+        el.classList.add('ebook-bookmarked');
+        const icon = el.querySelector('.ebook-bookmark-icon');
+        if (icon) icon.title = '移除书签';
+      }
+    }
+  }
+
+  // 滚动到指定书签段落并闪烁高亮
+  function scrollToBookmark(pageIndex, paragraphIndex) {
+    const container = document.getElementById(CONTAINER_ID);
+    if (!container) return false;
+    const el = container.querySelector(
+      `[data-ebook-page="${pageIndex}"][data-ebook-para="${paragraphIndex}"]`
+    );
+    if (!el) return false;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ebook-bookmark-flash');
+    setTimeout(() => el.classList.remove('ebook-bookmark-flash'), 2000);
+    return true;
+  }
+
+  // ===== 滚动锁定 =====
+
+  function withScrollLock(scrollContainer, fn, afterUnlock) {
     if (!scrollContainer) { fn(); return; }
 
     const savedTop = scrollContainer.scrollTop;
     let locked = true;
 
-    // 用户主动滚动时立即解锁
     const unlock = () => { locked = false; cleanup(); };
     scrollContainer.addEventListener('wheel', unlock, { once: true, passive: true });
     scrollContainer.addEventListener('touchmove', unlock, { once: true, passive: true });
 
-    // 冻结 scrollTop setter 和 scrollTo/scroll 方法
     const proto = Element.prototype;
     const desc = Object.getOwnPropertyDescriptor(proto, 'scrollTop');
 
@@ -159,10 +214,8 @@ const Renderer = (() => {
     scrollContainer.scrollTo = function(...a) { if (!locked) origScrollTo.apply(this, a); };
     scrollContainer.scroll = function(...a) { if (!locked) origScroll.apply(this, a); };
 
-    // 执行注入
     fn();
 
-    // 1.5 秒后自动解锁
     const timer = setTimeout(() => { locked = false; cleanup(); }, 1500);
 
     function cleanup() {
@@ -172,9 +225,11 @@ const Renderer = (() => {
       scrollContainer.scroll = origScroll;
       scrollContainer.removeEventListener('wheel', unlock);
       scrollContainer.removeEventListener('touchmove', unlock);
-      // 滚动到目标元素顶部（电子书内容开头），否则恢复原位
-      if (scrollTarget) {
-        try { scrollTarget.scrollIntoView({ behavior: 'instant', block: 'start' }); } catch (_) {}
+      // afterUnlock: 函数则执行，元素则 scrollIntoView，否则恢复原位
+      if (typeof afterUnlock === 'function') {
+        afterUnlock();
+      } else if (afterUnlock instanceof HTMLElement) {
+        try { afterUnlock.scrollIntoView({ behavior: 'instant', block: 'start' }); } catch (_) {}
       } else {
         try { desc.set.call(scrollContainer, savedTop); } catch (_) {}
       }
@@ -188,7 +243,14 @@ const Renderer = (() => {
     if (el) el.remove();
   }
 
-  function renderBatch(pages, startPage, totalPages, bookTitle) {
+  /**
+   * @param {string[]} pages
+   * @param {number} startPage
+   * @param {number} totalPages
+   * @param {string} bookTitle
+   * @param {{pageIndex:number, paragraphIndex:number}|null} scrollToTarget - 渲染后滚动到的书签段落
+   */
+  function renderBatch(pages, startPage, totalPages, bookTitle, scrollToTarget) {
     clearRendered();
 
     const chatContainer = findChatContainer();
@@ -197,7 +259,6 @@ const Renderer = (() => {
       return false;
     }
 
-    // 构建内容
     const container = document.createElement('div');
     container.id = CONTAINER_ID;
     container.className = 'ebook-reader-section';
@@ -208,8 +269,10 @@ const Renderer = (() => {
     container.appendChild(divider);
 
     pages.forEach((pageContent, idx) => {
-      const num = startPage + idx + 1;
-      container.appendChild(createBubble(pageContent, `第 ${num} 页 / 共 ${totalPages} 页`));
+      const pageIndex = startPage + idx;
+      container.appendChild(
+        createBubble(pageContent, `第 ${pageIndex + 1} 页 / 共 ${totalPages} 页`, pageIndex)
+      );
     });
 
     const footer = document.createElement('div');
@@ -218,17 +281,48 @@ const Renderer = (() => {
     footer.textContent = `显示第 ${startPage + 1}-${endPage} 页 | 使用快捷键翻页`;
     container.appendChild(footer);
 
-    // 在滚动锁定保护下注入到聊天底部，解锁后滚动到内容开头
+    // 书签图标点击事件（事件委托）
+    container.addEventListener('click', (e) => {
+      const icon = e.target.closest('.ebook-bookmark-icon');
+      if (!icon) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const para = icon.closest('.ebook-para');
+      if (!para || !_onBookmarkToggle) return;
+      const pageIdx = parseInt(para.dataset.ebookPage);
+      const paraIdx = parseInt(para.dataset.ebookPara);
+      // 取纯文本预览（去掉书签 emoji）
+      const preview = para.textContent.replace(/^🔖\s*/, '').trim().substring(0, 50);
+      _onBookmarkToggle(pageIdx, paraIdx, preview, para);
+    });
+
+    // 注入 + 滚动锁定
     const scrollContainer = findScrollContainer();
+    const afterUnlock = scrollToTarget
+      ? () => {
+          const el = container.querySelector(
+            `[data-ebook-page="${scrollToTarget.pageIndex}"][data-ebook-para="${scrollToTarget.paragraphIndex}"]`
+          );
+          if (el) {
+            el.scrollIntoView({ behavior: 'instant', block: 'center' });
+            el.classList.add('ebook-bookmark-flash');
+            setTimeout(() => el.classList.remove('ebook-bookmark-flash'), 2000);
+          } else {
+            container.scrollIntoView({ behavior: 'instant', block: 'start' });
+          }
+        }
+      : container; // 默认滚动到内容开头
+
     withScrollLock(scrollContainer, () => {
       chatContainer.appendChild(container);
-    }, container);
+    }, afterUnlock);
 
     return true;
   }
 
-  function setupObserver() {}
-  function destroyObserver() {}
-
-  return { renderBatch, clearRendered, setupObserver, destroyObserver };
+  return {
+    renderBatch, clearRendered,
+    setBookmarkCallback, applyBookmarks, scrollToBookmark,
+    setupObserver() {}, destroyObserver() {}
+  };
 })();

@@ -55,8 +55,7 @@ const Settings = (() => {
       toggle: { alt: true, shift: true, key: 'e' },
       next: { alt: true, shift: true, key: 'ArrowRight' },
       prev: { alt: true, shift: true, key: 'ArrowLeft' },
-      bookmark: { alt: true, shift: true, key: 'b' },
-      jumpBookmark: { alt: true, shift: true, key: 'j' }
+      jumpBookmark: { alt: true, shift: true, key: 'n' }
     }
   };
 
@@ -103,7 +102,7 @@ const ReadingProgress = (() => {
   return { get, set, clear };
 })();
 
-// 书签管理
+// 书签管理（段落级别）
 const Bookmarks = (() => {
   function _key(bookId) { return `bookmarks_${bookId}`; }
 
@@ -121,40 +120,39 @@ const Bookmarks = (() => {
     });
   }
 
-  async function add(bookId, batchIndex, label) {
+  async function add(bookId, pageIndex, paragraphIndex, preview) {
     const list = await getAll(bookId);
-    // 同一 batch 不重复添加
-    if (list.some(b => b.batchIndex === batchIndex)) return false;
-    list.push({ batchIndex, label, createdAt: new Date().toISOString() });
-    list.sort((a, b) => a.batchIndex - b.batchIndex);
+    if (list.some(b => b.pageIndex === pageIndex && b.paragraphIndex === paragraphIndex)) return false;
+    list.push({ pageIndex, paragraphIndex, preview, createdAt: new Date().toISOString() });
+    list.sort((a, b) => a.pageIndex - b.pageIndex || a.paragraphIndex - b.paragraphIndex);
     await _save(bookId, list);
     return true;
   }
 
-  async function remove(bookId, batchIndex) {
+  async function remove(bookId, pageIndex, paragraphIndex) {
     let list = await getAll(bookId);
-    list = list.filter(b => b.batchIndex !== batchIndex);
+    list = list.filter(b => !(b.pageIndex === pageIndex && b.paragraphIndex === paragraphIndex));
     await _save(bookId, list);
   }
 
-  async function toggle(bookId, batchIndex, label) {
+  async function toggle(bookId, pageIndex, paragraphIndex, preview) {
     const list = await getAll(bookId);
-    const exists = list.some(b => b.batchIndex === batchIndex);
+    const exists = list.some(b => b.pageIndex === pageIndex && b.paragraphIndex === paragraphIndex);
     if (exists) {
-      await remove(bookId, batchIndex);
+      await remove(bookId, pageIndex, paragraphIndex);
       return false; // removed
     } else {
-      await add(bookId, batchIndex, label);
+      await add(bookId, pageIndex, paragraphIndex, preview);
       return true; // added
     }
   }
 
-  // 找到当前 batch 之后的下一个书签（循环）
-  async function findNext(bookId, currentBatch) {
+  // 找到当前页面之后的下一个书签（循环）
+  async function findNext(bookId, currentPage) {
     const list = await getAll(bookId);
     if (list.length === 0) return null;
-    const after = list.find(b => b.batchIndex > currentBatch);
-    return after || list[0]; // 循环到第一个
+    const after = list.find(b => b.pageIndex > currentPage);
+    return after || list[0];
   }
 
   async function removeAll(bookId) {
