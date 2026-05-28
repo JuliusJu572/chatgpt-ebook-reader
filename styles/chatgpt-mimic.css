@@ -63,6 +63,63 @@
   margin: 0 0 16px 0;
 }
 
+.ebook-message-content h1 {
+  font-size: 1.75em;
+  font-weight: 700;
+  margin: 24px 0 12px;
+  line-height: 1.3;
+}
+
+.ebook-message-content h2 {
+  font-size: 1.45em;
+  font-weight: 700;
+  margin: 20px 0 10px;
+  line-height: 1.3;
+}
+
+.ebook-message-content h3 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 16px 0 8px;
+  line-height: 1.4;
+}
+
+.ebook-message-content h4,
+.ebook-message-content h5,
+.ebook-message-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+
+.ebook-message-content strong {
+  font-weight: 700;
+}
+
+.ebook-message-content em {
+  font-style: italic;
+}
+
+.ebook-message-content li {
+  margin-left: 24px;
+  margin-bottom: 4px;
+  list-style: disc;
+}
+
+.ebook-message-content blockquote {
+  border-left: 3px solid rgba(142, 142, 160, 0.3);
+  padding-left: 16px;
+  margin: 12px 0;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.ebook-message-content hr {
+  border: none;
+  border-top: 1px solid rgba(142, 142, 160, 0.2);
+  margin: 20px 0;
+}
+
 .ebook-message-content p:last-child {
   margin-bottom: 0;
 }

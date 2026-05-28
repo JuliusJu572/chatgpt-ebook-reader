@@ -6,11 +6,10 @@
 const Renderer = (() => {
   const CONTAINER_ID = 'ebook-reader-container';
   let observer = null;
+  let isRendering = false; // 防止 observer 循环触发
 
   // 查找 ChatGPT 的聊天消息列表容器
   function findChatContainer() {
-    // ChatGPT 使用 role="presentation" 的容器包裹对话
-    // 尝试多种选择器以提高健壮性
     const selectors = [
       '[class*="react-scroll-to-bottom"]',
       'main [role="presentation"]',
@@ -20,18 +19,69 @@ const Renderer = (() => {
     for (const sel of selectors) {
       const el = document.querySelector(sel);
       if (el) {
-        // 找到最内层的滚动容器
         const scrollable = el.querySelector('[class*="react-scroll-to-bottom"]') || el;
         const inner = scrollable.querySelector('.flex.flex-col') || scrollable;
         return inner;
       }
     }
 
-    // 最后回退：查找 main 元素内的第一个大容器
     const main = document.querySelector('main');
     if (main) return main;
-
     return null;
+  }
+
+  // 简易 Markdown → HTML 转换
+  function markdownToHtml(text) {
+    let html = escapeHtml(text);
+
+    // 标题（必须在行首）
+    html = html.replace(/^###### (.+)$/gm, '<h6>$1</h6>');
+    html = html.replace(/^##### (.+)$/gm, '<h5>$1</h5>');
+    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // 粗体和斜体
+    html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // 无序列表项
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+
+    // 有序列表项
+    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+    // 引用块
+    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+    // 分隔线
+    html = html.replace(/^---$/gm, '<hr>');
+
+    // 段落：将连续非标签行包裹为 <p>
+    const lines = html.split('\n');
+    const result = [];
+    let inParagraph = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (inParagraph) { result.push('</p>'); inParagraph = false; }
+        continue;
+      }
+      // 如果是块级元素，直接输出
+      if (/^<(h[1-6]|li|blockquote|hr)/.test(trimmed)) {
+        if (inParagraph) { result.push('</p>'); inParagraph = false; }
+        result.push(trimmed);
+      } else {
+        if (!inParagraph) { result.push('<p>'); inParagraph = true; }
+        result.push(trimmed);
+      }
+    }
+    if (inParagraph) result.push('</p>');
+
+    return result.join('\n');
   }
 
   // 创建电子书内容的消息气泡
@@ -46,19 +96,10 @@ const Renderer = (() => {
     header.textContent = pageInfo;
     wrapper.appendChild(header);
 
-    // 消息内容区域
+    // 消息内容区域 — 使用 Markdown 渲染
     const contentDiv = document.createElement('div');
-    contentDiv.className = 'ebook-message-content';
-
-    // 将文本按段落分割并渲染
-    const paragraphs = content.split(/\n\s*\n|\n/);
-    paragraphs.forEach(para => {
-      const trimmed = para.trim();
-      if (!trimmed) return;
-      const p = document.createElement('p');
-      p.textContent = trimmed;
-      contentDiv.appendChild(p);
-    });
+    contentDiv.className = 'ebook-message-content markdown-body';
+    contentDiv.innerHTML = markdownToHtml(content);
 
     wrapper.appendChild(contentDiv);
     return wrapper;
@@ -66,17 +107,24 @@ const Renderer = (() => {
 
   // 清除之前渲染的电子书内容
   function clearRendered() {
+    isRendering = true;
     const existing = document.getElementById(CONTAINER_ID);
     if (existing) existing.remove();
+    isRendering = false;
   }
 
   // 渲染一批页面到聊天区域
-  function renderBatch(pages, startPage, totalPages, bookTitle) {
-    clearRendered();
+  function renderBatch(pages, startPage, totalPages, bookTitle, shouldScroll = true) {
+    isRendering = true;
+
+    // 先移除旧内容
+    const existing = document.getElementById(CONTAINER_ID);
+    if (existing) existing.remove();
 
     const chatContainer = findChatContainer();
     if (!chatContainer) {
       console.warn('[eBook Reader] 无法找到 ChatGPT 聊天容器');
+      isRendering = false;
       return false;
     }
 
@@ -105,10 +153,18 @@ const Renderer = (() => {
     footer.textContent = `显示第 ${startPage + 1}-${endPage} 页 | 使用快捷键翻页`;
     container.appendChild(footer);
 
-    chatContainer.appendChild(container);
+    // 插入到聊天容器的最前面（而不是最后面）
+    chatContainer.prepend(container);
 
-    // 滚动到底部
-    container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    // 滚动到内容顶部
+    if (shouldScroll) {
+      requestAnimationFrame(() => {
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+
+    // 延迟解除渲染锁，避免 observer 误触发
+    setTimeout(() => { isRendering = false; }, 300);
 
     return true;
   }
@@ -126,16 +182,23 @@ const Renderer = (() => {
     const chatContainer = findChatContainer();
     if (!chatContainer) return;
 
-    observer = new MutationObserver((mutations) => {
-      // 检查我们的容器是否被移除
+    observer = new MutationObserver(() => {
+      // 渲染过程中忽略变化
+      if (isRendering) return;
+
+      // 仅在容器确实被移除时才重新渲染
       const ourContainer = document.getElementById(CONTAINER_ID);
       if (!ourContainer && rerenderCallback) {
-        // 延迟重新渲染，避免和 React 冲突
-        setTimeout(() => rerenderCallback(), 100);
+        setTimeout(() => {
+          if (!document.getElementById(CONTAINER_ID)) {
+            rerenderCallback();
+          }
+        }, 500);
       }
     });
 
-    observer.observe(chatContainer, { childList: true, subtree: true });
+    // 只监听直接子节点变化，不监听 subtree（减少误触发）
+    observer.observe(chatContainer, { childList: true, subtree: false });
   }
 
   function destroyObserver() {

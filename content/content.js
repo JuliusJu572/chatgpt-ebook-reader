@@ -37,7 +37,7 @@
         Navigator.renderCurrent();
         Renderer.setupObserver(() => {
           if (settings.enabled && Navigator.getState().hasBook) {
-            Navigator.renderCurrent();
+            Navigator.renderCurrent(false);
           }
         });
       }
@@ -79,10 +79,9 @@
           // 等待 ChatGPT 页面完全加载后渲染
           setTimeout(() => {
             Navigator.renderCurrent();
-            // 设置 MutationObserver 保持内容稳定
             Renderer.setupObserver(() => {
               if (settings.enabled && Navigator.getState().hasBook) {
-                Navigator.renderCurrent();
+                Navigator.renderCurrent(false); // observer 重建不滚动
               }
             });
           }, 2000);
@@ -118,7 +117,7 @@
               Navigator.renderCurrent();
               Renderer.setupObserver(() => {
                 if (settings.enabled && Navigator.getState().hasBook) {
-                  Navigator.renderCurrent();
+                  Navigator.renderCurrent(false);
                 }
               });
             }
