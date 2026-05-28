@@ -119,29 +119,63 @@ const Bookmarks = (() => {
     });
   }
 
-  async function add(bookId, pageIndex, paragraphIndex, preview) {
+  function normalizeBookmark(pageIndexOrBookmark, paragraphIndex, preview, locId) {
+    if (typeof pageIndexOrBookmark === 'object' && pageIndexOrBookmark !== null) {
+      return {
+        locId: pageIndexOrBookmark.locId || null,
+        pageIndex: pageIndexOrBookmark.pageIndex,
+        paragraphIndex: pageIndexOrBookmark.paragraphIndex,
+        preview: pageIndexOrBookmark.preview || '',
+        createdAt: pageIndexOrBookmark.createdAt
+      };
+    }
+    return {
+      locId: locId || null,
+      pageIndex: pageIndexOrBookmark,
+      paragraphIndex,
+      preview: preview || ''
+    };
+  }
+
+  function sameBookmark(a, b) {
+    if (a.locId && b.locId) return a.locId === b.locId;
+    return a.pageIndex === b.pageIndex && a.paragraphIndex === b.paragraphIndex;
+  }
+
+  function sortBookmarks(list) {
+    list.sort((a, b) =>
+      (a.pageIndex ?? Number.MAX_SAFE_INTEGER) - (b.pageIndex ?? Number.MAX_SAFE_INTEGER) ||
+      (a.paragraphIndex ?? Number.MAX_SAFE_INTEGER) - (b.paragraphIndex ?? Number.MAX_SAFE_INTEGER) ||
+      String(a.locId || '').localeCompare(String(b.locId || ''))
+    );
+  }
+
+  async function add(bookId, pageIndexOrBookmark, paragraphIndex, preview, locId) {
+    const bookmark = normalizeBookmark(pageIndexOrBookmark, paragraphIndex, preview, locId);
     const list = await getAll(bookId);
-    if (list.some(b => b.pageIndex === pageIndex && b.paragraphIndex === paragraphIndex)) return false;
-    list.push({ pageIndex, paragraphIndex, preview, createdAt: new Date().toISOString() });
-    list.sort((a, b) => a.pageIndex - b.pageIndex || a.paragraphIndex - b.paragraphIndex);
+    if (list.some(b => sameBookmark(b, bookmark))) return false;
+    list.push({ ...bookmark, createdAt: bookmark.createdAt || new Date().toISOString() });
+    sortBookmarks(list);
     await _save(bookId, list);
     return true;
   }
 
-  async function remove(bookId, pageIndex, paragraphIndex) {
+  async function remove(bookId, pageIndexOrBookmark, paragraphIndex) {
+    const bookmark = normalizeBookmark(pageIndexOrBookmark, paragraphIndex);
     let list = await getAll(bookId);
-    list = list.filter(b => !(b.pageIndex === pageIndex && b.paragraphIndex === paragraphIndex));
+    list = list.filter(b => !sameBookmark(b, bookmark));
     await _save(bookId, list);
   }
 
-  async function toggle(bookId, pageIndex, paragraphIndex, preview) {
+  async function toggle(bookId, pageIndexOrBookmark, paragraphIndex, preview, locId) {
+    const bookmark = normalizeBookmark(pageIndexOrBookmark, paragraphIndex, preview, locId);
     const list = await getAll(bookId);
-    const exists = list.some(b => b.pageIndex === pageIndex && b.paragraphIndex === paragraphIndex);
+    const exists = list.some(b => sameBookmark(b, bookmark));
     if (exists) {
-      await remove(bookId, pageIndex, paragraphIndex);
+      await remove(bookId, bookmark);
       return false; // removed
     } else {
-      await add(bookId, pageIndex, paragraphIndex, preview);
+      await add(bookId, bookmark);
       return true; // added
     }
   }
@@ -160,5 +194,22 @@ const Bookmarks = (() => {
     });
   }
 
-  return { getAll, add, remove, toggle, findNext, removeAll };
+  async function reindex(bookId, pageIndexByLocId) {
+    if (!pageIndexByLocId) return;
+    const list = await getAll(bookId);
+    let changed = false;
+    const next = list.map(bookmark => {
+      if (!bookmark.locId || pageIndexByLocId[bookmark.locId] === undefined) return bookmark;
+      const pageIndex = pageIndexByLocId[bookmark.locId];
+      if (bookmark.pageIndex === pageIndex) return bookmark;
+      changed = true;
+      return { ...bookmark, pageIndex };
+    });
+    if (changed) {
+      sortBookmarks(next);
+      await _save(bookId, next);
+    }
+  }
+
+  return { getAll, add, remove, toggle, findNext, removeAll, reindex };
 })();

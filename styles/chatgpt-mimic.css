@@ -1,6 +1,11 @@
 /* 模拟 ChatGPT 回复消息的样式 */
 
 /* ====== 电子书内容区域 ====== */
+.ebook-reader-turn {
+  width: 100%;
+  flex: 0 0 auto;
+}
+
 .ebook-reader-section {
   width: 100%;
   padding: 16px 0;

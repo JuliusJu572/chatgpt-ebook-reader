@@ -34,8 +34,11 @@
         "https://chat.openai.com/*"
       ],
       "js": [
+        "lib/parser.js",
         "storage/db.js",
         "content/shortcut.js",
+        "content/dom-adapter.js",
+        "content/reader-mount.js",
         "content/renderer.js",
         "content/navigator.js",
         "content/indicator.js",

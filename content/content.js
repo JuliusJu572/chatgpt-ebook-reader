@@ -29,10 +29,15 @@
   });
 
   // 书签图标点击回调
-  Renderer.setBookmarkCallback(async (pageIndex, paragraphIndex, preview, paraElement) => {
+  Renderer.setBookmarkCallback(async (pageIndex, paragraphIndex, preview, paraElement, locId) => {
     const state = Navigator.getState();
     if (!state.bookId) return;
-    const added = await Bookmarks.toggle(state.bookId, pageIndex, paragraphIndex, preview);
+    const added = await Bookmarks.toggle(state.bookId, {
+      locId,
+      pageIndex,
+      paragraphIndex,
+      preview
+    });
     if (added) {
       paraElement.classList.add('ebook-bookmarked');
       const icon = paraElement.querySelector('.ebook-bookmark-icon');
@@ -55,12 +60,12 @@
     Indicator.setEnabled(settings.enabled);
 
     if (!settings.enabled) {
-      Renderer.clearRendered();
+      Renderer.clearRendered({ restoreToLastNative: true });
       Indicator.showMessage('插件已禁用');
     } else {
       Indicator.showMessage('插件已启用');
       if (Navigator.getState().hasBook) {
-        Navigator.renderCurrent();
+        Navigator.renderCurrent({ type: 'open-reader' });
       }
     }
   });
@@ -94,7 +99,7 @@
       Indicator.showMessage('📭 没有书签，hover 段落点击 🔖 添加');
       return;
     }
-    Navigator.jumpToBookmark(next.pageIndex, next.paragraphIndex);
+    Navigator.jumpToBookmark(next.pageIndex, next.paragraphIndex, next.locId);
     Indicator.showMessage(`🔖 跳转到书签: ${next.preview || '第' + (next.pageIndex + 1) + '页'}`);
   });
 
@@ -114,7 +119,8 @@
         Navigator.setBatchIndex(progress.batchIndex || 0);
         if (settings.enabled) {
           setTimeout(() => {
-            Navigator.renderCurrent();
+            if (progress.locId && Navigator.jumpToLocation(progress.locId)) return;
+            Navigator.renderCurrent({ type: 'restore-progress' });
           }, 2000);
         }
         console.log(`[eBook Reader] 恢复阅读: ${book.title}, 批次 ${progress.batchIndex}`);
@@ -144,7 +150,7 @@
             Navigator.setBook(resp.book);
             Navigator.setBatchIndex(0);
             if (settings.enabled) {
-              Navigator.renderCurrent();
+              Navigator.renderCurrent({ type: 'open-reader' });
             }
             sendResponse({ success: true });
           } else {
@@ -168,9 +174,13 @@
             sendResponse({ success: false, error: '未加载书籍' });
             break;
           }
-          Navigator.jumpToBookmark(message.pageIndex, message.paragraphIndex);
-          Indicator.showMessage(`🔖 跳转到书签`);
-          sendResponse({ success: true });
+          const jumped = Navigator.jumpToBookmark(message.pageIndex, message.paragraphIndex, message.locId);
+          if (jumped) {
+            Indicator.showMessage(`🔖 跳转到书签`);
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: '书签位置未找到' });
+          }
           break;
         }
 
@@ -194,15 +204,17 @@
           });
           if (rResp && rResp.success && rResp.book && rResp.book.rawText) {
             const rBook = rResp.book;
-            rBook.pages = splitIntoPages(rBook.rawText, message.charsPerPage);
+            rBook.pages = EbookParser.splitIntoPages(rBook, message.charsPerPage);
             rBook.totalPages = rBook.pages.length;
+            rBook.parserVersion = EbookParser.PARSER_VERSION || rBook.parserVersion;
+            await Bookmarks.reindex(rBook.id, rBook.pageIndexByLocId);
             await new Promise(resolve => {
               chrome.runtime.sendMessage({ type: 'DB_SAVE_BOOK', book: rBook }, resolve);
             });
             Navigator.setBook(rBook);
             Navigator.setBatchIndex(0);
             if (settings.enabled) {
-              Navigator.renderCurrent();
+              Navigator.renderCurrent({ type: 'batch-start' });
             }
             sendResponse({ success: true, totalPages: rBook.totalPages });
           } else {
@@ -232,36 +244,3 @@
 
   console.log('[eBook Reader] 初始化完成');
 })();
-
-// 工具函数：文本分页
-function splitIntoPages(text, charsPerPage) {
-  const pages = [];
-  let i = 0;
-  while (i < text.length) {
-    let end = Math.min(i + charsPerPage, text.length);
-    if (end < text.length) {
-      const slice = text.substring(i, end);
-      const lastPara = slice.lastIndexOf('\n\n');
-      const lastNewline = slice.lastIndexOf('\n');
-      const lastPeriod = Math.max(
-        slice.lastIndexOf('。'),
-        slice.lastIndexOf('.'),
-        slice.lastIndexOf('！'),
-        slice.lastIndexOf('？')
-      );
-
-      if (lastPara > charsPerPage * 0.5) {
-        end = i + lastPara + 2;
-      } else if (lastNewline > charsPerPage * 0.5) {
-        end = i + lastNewline + 1;
-      } else if (lastPeriod > charsPerPage * 0.5) {
-        end = i + lastPeriod + 1;
-      }
-    }
-
-    const page = text.substring(i, end).trim();
-    if (page) pages.push(page);
-    i = end;
-  }
-  return pages;
-}

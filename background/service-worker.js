@@ -137,7 +137,12 @@ async function handleMessage(message, sender) {
 }
 
 async function forwardToContentScript(message) {
-  const tabs = await chrome.tabs.query({
+  const activeTabs = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+    url: ['https://chatgpt.com/*', 'https://chat.openai.com/*']
+  });
+  const tabs = activeTabs.length > 0 ? activeTabs : await chrome.tabs.query({
     url: ['https://chatgpt.com/*', 'https://chat.openai.com/*']
   });
   if (tabs.length === 0) {

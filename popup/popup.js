@@ -66,14 +66,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       setProgress(60, '正在分页...');
       const currentSettings = await Settings.get();
-      const pages = EbookParser.splitIntoPages(parsed.rawText, currentSettings.charsPerPage);
+      const pages = EbookParser.splitIntoPages(parsed, currentSettings.charsPerPage);
 
       setProgress(80, '正在保存...');
       const book = {
         title: parsed.title,
         fileName: file.name,
         rawText: parsed.rawText,
+        parserVersion: parsed.parserVersion,
+        spine: parsed.spine || [],
+        segments: parsed.segments || [],
+        toc: parsed.toc || [],
         pages: pages,
+        pageIndexByLocId: parsed.pageIndexByLocId || {},
         totalPages: pages.length,
         totalChars: parsed.totalChars
       };
@@ -147,6 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const bookId = btn.dataset.id;
         if (confirm('确定要删除这本书吗？')) {
           await EbookDB.deleteBook(bookId);
+          await Bookmarks.removeAll(bookId);
           const currentProgress = await ReadingProgress.get();
           if (currentProgress?.bookId === bookId) {
             await ReadingProgress.clear();
@@ -199,6 +205,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 保存设置
   document.getElementById('saveSettings').addEventListener('click', async () => {
+    const oldCharsPerPage = settings.charsPerPage;
     const newSettings = {
       charsPerPage: parseInt(document.getElementById('charsPerPage').value) || 2000,
       pagesPerBatch: parseInt(document.getElementById('pagesPerBatch').value) || 10,
@@ -206,7 +213,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     await Settings.set(newSettings);
+    Object.assign(settings, newSettings);
     sendToContent({ type: 'UPDATE_SETTINGS', settings: newSettings, target: 'content' });
+    if (newSettings.charsPerPage !== oldCharsPerPage) {
+      const progress = await ReadingProgress.get();
+      if (progress?.bookId) {
+        sendToContent({ type: 'REPARSE_BOOK', bookId: progress.bookId, charsPerPage: newSettings.charsPerPage });
+      }
+    }
     setStatus('✅ 设置已保存');
   });
 
@@ -217,6 +231,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (chrome.runtime.lastError) {
         setStatus('⚠️ 请先打开 ChatGPT 页面');
         console.warn('消息发送失败:', chrome.runtime.lastError.message);
+      } else if (response && response.success === false) {
+        setStatus(`⚠️ ${response.error || '操作失败'}`);
       }
     });
   }
@@ -292,14 +308,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     section.style.display = 'block';
     list.innerHTML = bookmarks.map(bm => `
-      <div class="bookmark-item" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}">
+      <div class="bookmark-item" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}" data-loc="${escapeHtml(bm.locId || '')}">
         <div class="bookmark-info">
           <span class="bookmark-label">🔖 第 ${bm.pageIndex + 1} 页</span>
           <span class="bookmark-preview">${escapeHtml((bm.preview || '').substring(0, 40))}</span>
         </div>
         <div class="bookmark-actions">
-          <button class="book-btn jump" title="跳转" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}">📖</button>
-          <button class="book-btn del-bm" title="删除" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}">✕</button>
+          <button class="book-btn jump" title="跳转" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}" data-loc="${escapeHtml(bm.locId || '')}">📖</button>
+          <button class="book-btn del-bm" title="删除" data-page="${bm.pageIndex}" data-para="${bm.paragraphIndex}" data-loc="${escapeHtml(bm.locId || '')}">✕</button>
         </div>
       </div>
     `).join('');
@@ -308,7 +324,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.addEventListener('click', () => {
         const pageIndex = parseInt(btn.dataset.page);
         const paragraphIndex = parseInt(btn.dataset.para);
-        sendToContent({ type: 'JUMP_BOOKMARK', pageIndex, paragraphIndex });
+        const locId = btn.dataset.loc || null;
+        sendToContent({ type: 'JUMP_BOOKMARK', pageIndex, paragraphIndex, locId });
         setStatus(`跳转到第 ${pageIndex + 1} 页`);
       });
     });
@@ -317,7 +334,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.addEventListener('click', async () => {
         const pageIndex = parseInt(btn.dataset.page);
         const paragraphIndex = parseInt(btn.dataset.para);
-        await Bookmarks.remove(progress.bookId, pageIndex, paragraphIndex);
+        const locId = btn.dataset.loc || null;
+        await Bookmarks.remove(progress.bookId, { pageIndex, paragraphIndex, locId });
         await loadBookmarks();
         setStatus('书签已删除');
       });

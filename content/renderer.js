@@ -1,57 +1,13 @@
 /**
  * ChatGPT 聊天区域渲染引擎
  *
- * 策略：注入到 ChatGPT 聊天容器底部（看起来像新消息），同时通过
- * 滚动锁定机制阻止 react-scroll-to-bottom 的自动滚动。
+ * 策略：生成阅读内容，由 ReaderMountManager 负责挂载到最后一条原生消息后。
  * 支持段落级书签（悬浮图标点击添加/移除）。
  */
 
 const Renderer = (() => {
   const CONTAINER_ID = 'ebook-reader-container';
   let _onBookmarkToggle = null; // 书签切换回调
-
-  // ===== DOM 查找 =====
-
-  function findScrollContainer() {
-    const selectors = [
-      'div[class*="react-scroll-to-bottom"] > div',
-      'main .overflow-y-auto',
-      'main div[class*="overflow-y-auto"]',
-    ];
-    for (const sel of selectors) {
-      const els = document.querySelectorAll(sel);
-      for (const el of els) {
-        const cs = window.getComputedStyle(el);
-        if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') &&
-            el.scrollHeight > el.clientHeight + 10) {
-          return el;
-        }
-      }
-    }
-    const main = document.querySelector('main');
-    if (!main) return null;
-    let best = null, bestH = 0;
-    for (const el of main.querySelectorAll('div')) {
-      const cs = window.getComputedStyle(el);
-      if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') &&
-          el.scrollHeight > el.clientHeight + 10 &&
-          el.scrollHeight > bestH) {
-        best = el;
-        bestH = el.scrollHeight;
-      }
-    }
-    return best;
-  }
-
-  function findChatContainer() {
-    const sc = findScrollContainer();
-    if (sc) {
-      return sc.querySelector(':scope > .flex.flex-col')
-          || sc.querySelector('.flex.flex-col')
-          || sc;
-    }
-    return document.querySelector('main');
-  }
 
   // ===== Markdown → HTML =====
 
@@ -111,7 +67,7 @@ const Renderer = (() => {
 
   // ===== 消息气泡 =====
 
-  function createBubble(content, pageInfo, pageIndex) {
+  function createBubble(page, pageInfo, pageIndex) {
     const w = document.createElement('div');
     w.className = 'ebook-message-wrapper';
 
@@ -122,26 +78,78 @@ const Renderer = (() => {
 
     const c = document.createElement('div');
     c.className = 'ebook-message-content';
-    c.innerHTML = markdownToHtml(content);
 
-    // 为每个块级元素添加段落标识和书签图标
-    let paraIdx = 0;
-    for (const child of Array.from(c.children)) {
-      if (child.tagName === 'HR') continue;
-      child.classList.add('ebook-para');
-      child.dataset.ebookPage = pageIndex;
-      child.dataset.ebookPara = paraIdx;
-      // 书签图标（hover 时显示）
-      const icon = document.createElement('span');
-      icon.className = 'ebook-bookmark-icon';
-      icon.textContent = '🔖';
-      icon.title = '添加书签';
-      child.prepend(icon);
-      paraIdx++;
+    const segments = getPageSegments(page);
+    if (segments.length > 0) {
+      segments.forEach((segment, idx) => {
+        const child = createSegmentElement(segment, pageIndex, idx);
+        c.appendChild(child);
+      });
+    } else {
+      c.innerHTML = markdownToHtml(getPageText(page));
+
+      // 为每个块级元素添加段落标识和书签图标（旧书兼容）
+      let paraIdx = 0;
+      for (const child of Array.from(c.children)) {
+        if (child.tagName === 'HR') continue;
+        decorateParagraph(child, pageIndex, paraIdx, null, paraIdx);
+        paraIdx++;
+      }
     }
 
     w.appendChild(c);
     return w;
+  }
+
+  function getPageSegments(page) {
+    if (page && typeof page === 'object' && Array.isArray(page.segments)) {
+      return page.segments;
+    }
+    return [];
+  }
+
+  function getPageText(page) {
+    if (typeof page === 'string') return page;
+    if (page && typeof page.text === 'string') return page.text;
+    return '';
+  }
+
+  function createSegmentElement(segment, pageIndex, segmentIndex) {
+    if (segment.kind === 'separator') {
+      const hr = document.createElement('hr');
+      if (segment.locId) hr.dataset.ebookLocId = segment.locId;
+      return hr;
+    }
+
+    const tag = getSegmentTag(segment);
+    const el = document.createElement(tag);
+    el.textContent = segment.text || '';
+    decorateParagraph(el, pageIndex, segment.paragraphIndexInSpine ?? segmentIndex, segment.locId, segmentIndex);
+    return el;
+  }
+
+  function getSegmentTag(segment) {
+    if (segment.kind === 'heading') {
+      const level = Math.min(Math.max(segment.level || 3, 1), 6);
+      return `h${level}`;
+    }
+    if (segment.kind === 'listItem') return 'li';
+    if (segment.kind === 'blockquote') return 'blockquote';
+    return 'p';
+  }
+
+  function decorateParagraph(child, pageIndex, paragraphIndex, locId, segmentIndex) {
+    child.classList.add('ebook-para');
+    child.dataset.ebookPage = pageIndex;
+    child.dataset.ebookPara = paragraphIndex;
+    child.dataset.ebookSegmentIndex = segmentIndex;
+    if (locId) child.dataset.ebookLocId = locId;
+
+    const icon = document.createElement('span');
+    icon.className = 'ebook-bookmark-icon';
+    icon.textContent = '🔖';
+    icon.title = '添加书签';
+    child.prepend(icon);
   }
 
   // ===== 书签 =====
@@ -162,9 +170,7 @@ const Renderer = (() => {
     });
     // 应用书签
     for (const bm of bookmarks) {
-      const el = container.querySelector(
-        `[data-ebook-page="${bm.pageIndex}"][data-ebook-para="${bm.paragraphIndex}"]`
-      );
+      const el = findBookmarkElement(container, bm);
       if (el) {
         el.classList.add('ebook-bookmarked');
         const icon = el.querySelector('.ebook-bookmark-icon');
@@ -174,73 +180,95 @@ const Renderer = (() => {
   }
 
   // 滚动到指定书签段落并闪烁高亮
-  function scrollToBookmark(pageIndex, paragraphIndex) {
+  function scrollToBookmark(pageIndex, paragraphIndex, locId) {
     const container = document.getElementById(CONTAINER_ID);
     if (!container) return false;
-    const el = container.querySelector(
-      `[data-ebook-page="${pageIndex}"][data-ebook-para="${paragraphIndex}"]`
-    );
+    const el = locId
+      ? findLocElement(container, locId)
+      : container.querySelector(`[data-ebook-page="${pageIndex}"][data-ebook-para="${paragraphIndex}"]`);
     if (!el) return false;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    scrollElementIntoReaderView(el, 'center');
     el.classList.add('ebook-bookmark-flash');
     setTimeout(() => el.classList.remove('ebook-bookmark-flash'), 2000);
     return true;
   }
 
+  function findBookmarkElement(container, bookmark) {
+    if (bookmark.locId) {
+      const byLoc = findLocElement(container, bookmark.locId);
+      if (byLoc) return byLoc;
+    }
+    if (bookmark.pageIndex === undefined || bookmark.paragraphIndex === undefined) return null;
+    return container.querySelector(
+      `[data-ebook-page="${bookmark.pageIndex}"][data-ebook-para="${bookmark.paragraphIndex}"]`
+    );
+  }
+
+  function findLocElement(container, locId) {
+    return container.querySelector(`[data-ebook-loc-id="${escapeSelectorValue(locId)}"]`);
+  }
+
+  function escapeSelectorValue(value) {
+    return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  }
+
   // ===== 滚动锁定 =====
 
-  function withScrollLock(scrollContainer, fn, afterUnlock) {
-    if (!scrollContainer) { fn(); return; }
+  function scrollElementIntoReaderView(element, block = 'start') {
+    ChatDomAdapter.stabilizeScrollToElement(element, block, { duration: 120 });
+  }
 
-    const savedTop = scrollContainer.scrollTop;
-    let locked = true;
+  function stabilizeScrollToTarget(container, scrollTarget) {
+    const target = resolveScrollTarget(container, scrollTarget);
+    if (!target) return;
 
-    const unlock = () => { locked = false; cleanup(); };
-    scrollContainer.addEventListener('wheel', unlock, { once: true, passive: true });
-    scrollContainer.addEventListener('touchmove', unlock, { once: true, passive: true });
+    ChatDomAdapter.stabilizeScrollToElement(target.element, target.block || 'start', { duration: 650 });
+    setTimeout(() => flashTarget(target), 650);
+  }
 
-    const proto = Element.prototype;
-    const desc = Object.getOwnPropertyDescriptor(proto, 'scrollTop');
+  function resolveScrollTarget(container, scrollTarget) {
+    const target = normalizeScrollTarget(scrollTarget);
+    let element = null;
+    let block = 'start';
 
-    if (desc && desc.set) {
-      Object.defineProperty(scrollContainer, 'scrollTop', {
-        get() { return desc.get.call(this); },
-        set(v) { if (!locked) desc.set.call(this, v); },
-        configurable: true,
-      });
+    if (target.locId) {
+      element = findLocElement(container, target.locId);
+      block = 'center';
+    } else if (target.pageIndex !== undefined && target.paragraphIndex !== undefined) {
+      element = container.querySelector(
+        `[data-ebook-page="${target.pageIndex}"][data-ebook-para="${target.paragraphIndex}"]`
+      );
+      block = 'center';
     }
-    const origScrollTo = scrollContainer.scrollTo;
-    const origScroll = scrollContainer.scroll;
-    scrollContainer.scrollTo = function(...a) { if (!locked) origScrollTo.apply(this, a); };
-    scrollContainer.scroll = function(...a) { if (!locked) origScroll.apply(this, a); };
 
-    fn();
-
-    const timer = setTimeout(() => { locked = false; cleanup(); }, 1500);
-
-    function cleanup() {
-      clearTimeout(timer);
-      if (desc && desc.set) delete scrollContainer.scrollTop;
-      scrollContainer.scrollTo = origScrollTo;
-      scrollContainer.scroll = origScroll;
-      scrollContainer.removeEventListener('wheel', unlock);
-      scrollContainer.removeEventListener('touchmove', unlock);
-      // afterUnlock: 函数则执行，元素则 scrollIntoView，否则恢复原位
-      if (typeof afterUnlock === 'function') {
-        afterUnlock();
-      } else if (afterUnlock instanceof HTMLElement) {
-        try { afterUnlock.scrollIntoView({ behavior: 'instant', block: 'start' }); } catch (_) {}
-      } else {
-        try { desc.set.call(scrollContainer, savedTop); } catch (_) {}
-      }
+    if (!element) {
+      element = container;
+      block = 'start';
     }
+
+    return { element, block, shouldFlash: !!target.locId || target.paragraphIndex !== undefined };
+  }
+
+  function normalizeScrollTarget(scrollTarget) {
+    if (!scrollTarget) return { type: 'batch-start' };
+    if (scrollTarget.type === 'location') return { locId: scrollTarget.locId };
+    if (scrollTarget.type === 'legacy-bookmark') {
+      return { pageIndex: scrollTarget.pageIndex, paragraphIndex: scrollTarget.paragraphIndex };
+    }
+    if (scrollTarget.locId) return { locId: scrollTarget.locId };
+    return scrollTarget;
+  }
+
+  function flashTarget(target) {
+    if (!target.shouldFlash || !target.element.classList.contains('ebook-para')) return;
+    target.element.classList.add('ebook-bookmark-flash');
+    setTimeout(() => target.element.classList.remove('ebook-bookmark-flash'), 2000);
   }
 
   // ===== 渲染 =====
 
-  function clearRendered() {
-    const el = document.getElementById(CONTAINER_ID);
-    if (el) el.remove();
+  function clearRendered(options) {
+    ReaderMountManager.clear(options);
   }
 
   /**
@@ -251,14 +279,6 @@ const Renderer = (() => {
    * @param {{pageIndex:number, paragraphIndex:number}|null} scrollToTarget - 渲染后滚动到的书签段落
    */
   function renderBatch(pages, startPage, totalPages, bookTitle, scrollToTarget) {
-    clearRendered();
-
-    const chatContainer = findChatContainer();
-    if (!chatContainer) {
-      console.warn('[eBook Reader] 无法找到 ChatGPT 聊天容器');
-      return false;
-    }
-
     const container = document.createElement('div');
     container.id = CONTAINER_ID;
     container.className = 'ebook-reader-section';
@@ -269,7 +289,7 @@ const Renderer = (() => {
     container.appendChild(divider);
 
     pages.forEach((pageContent, idx) => {
-      const pageIndex = startPage + idx;
+      const pageIndex = getPageIndex(pageContent, startPage + idx);
       container.appendChild(
         createBubble(pageContent, `第 ${pageIndex + 1} 页 / 共 ${totalPages} 页`, pageIndex)
       );
@@ -289,35 +309,44 @@ const Renderer = (() => {
       e.stopPropagation();
       const para = icon.closest('.ebook-para');
       if (!para || !_onBookmarkToggle) return;
-      const pageIdx = parseInt(para.dataset.ebookPage);
-      const paraIdx = parseInt(para.dataset.ebookPara);
+      const pageIdx = parseInt(para.dataset.ebookPage, 10);
+      const paraIdx = parseInt(para.dataset.ebookPara, 10);
+      const locId = para.dataset.ebookLocId || null;
       // 取纯文本预览（去掉书签 emoji）
       const preview = para.textContent.replace(/^🔖\s*/, '').trim().substring(0, 50);
-      _onBookmarkToggle(pageIdx, paraIdx, preview, para);
+      _onBookmarkToggle(pageIdx, paraIdx, preview, para, locId);
     });
 
-    // 注入 + 滚动锁定
-    const scrollContainer = findScrollContainer();
-    const afterUnlock = scrollToTarget
-      ? () => {
-          const el = container.querySelector(
-            `[data-ebook-page="${scrollToTarget.pageIndex}"][data-ebook-para="${scrollToTarget.paragraphIndex}"]`
-          );
-          if (el) {
-            el.scrollIntoView({ behavior: 'instant', block: 'center' });
-            el.classList.add('ebook-bookmark-flash');
-            setTimeout(() => el.classList.remove('ebook-bookmark-flash'), 2000);
-          } else {
-            container.scrollIntoView({ behavior: 'instant', block: 'start' });
-          }
-        }
-      : container; // 默认滚动到内容开头
+    const mounted = ReaderMountManager.mount(container);
+    if (!mounted.success) {
+      Indicator.showMessage(`⚠️ ${mounted.error || '阅读器挂载失败'}`);
+      return false;
+    }
 
-    withScrollLock(scrollContainer, () => {
-      chatContainer.appendChild(container);
-    }, afterUnlock);
+    assertLocationRenderCount(container, pages);
+    stabilizeScrollToTarget(container, scrollToTarget || { type: 'batch-start' });
 
     return true;
+  }
+
+  function getPageIndex(page, fallback) {
+    return page && typeof page === 'object' && Number.isInteger(page.pageIndex)
+      ? page.pageIndex
+      : fallback;
+  }
+
+  function assertLocationRenderCount(container, pages) {
+    const expected = pages.reduce((sum, page) => {
+      if (!page || typeof page !== 'object') return sum;
+      if (Array.isArray(page.segments)) return sum + page.segments.filter(segment => segment.kind !== 'separator').length;
+      return sum;
+    }, 0);
+    if (!expected) return;
+
+    const actual = container.querySelectorAll('[data-ebook-loc-id].ebook-para').length;
+    if (actual !== expected) {
+      console.warn('[eBook Reader] 段落定位渲染数量不一致', { expected, actual });
+    }
   }
 
   return {
