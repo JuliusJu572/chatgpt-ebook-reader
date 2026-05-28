@@ -1,34 +1,13 @@
 /**
  * ChatGPT 聊天区域渲染引擎
- * 在 ChatGPT 对话界面注入模拟 response 消息气泡
+ * 
+ * 核心策略：不往 ChatGPT 的聊天消息容器里注入内容（会触发 react-scroll-to-bottom 的
+ * 自动滚动，导致滚动冲突），而是在 <main> 内创建独立的覆盖层，有自己的滚动逻辑。
  */
 
 const Renderer = (() => {
   const CONTAINER_ID = 'ebook-reader-container';
-  let observer = null;
-  let isRendering = false; // 防止 observer 循环触发
-
-  // 查找 ChatGPT 的聊天消息列表容器
-  function findChatContainer() {
-    const selectors = [
-      '[class*="react-scroll-to-bottom"]',
-      'main [role="presentation"]',
-      'main .flex.flex-col',
-    ];
-
-    for (const sel of selectors) {
-      const el = document.querySelector(sel);
-      if (el) {
-        const scrollable = el.querySelector('[class*="react-scroll-to-bottom"]') || el;
-        const inner = scrollable.querySelector('.flex.flex-col') || scrollable;
-        return inner;
-      }
-    }
-
-    const main = document.querySelector('main');
-    if (main) return main;
-    return null;
-  }
+  const OVERLAY_ID = 'ebook-reader-overlay';
 
   // 简易 Markdown → HTML 转换
   function markdownToHtml(text) {
@@ -70,7 +49,6 @@ const Renderer = (() => {
         if (inParagraph) { result.push('</p>'); inParagraph = false; }
         continue;
       }
-      // 如果是块级元素，直接输出
       if (/^<(h[1-6]|li|blockquote|hr)/.test(trimmed)) {
         if (inParagraph) { result.push('</p>'); inParagraph = false; }
         result.push(trimmed);
@@ -88,43 +66,57 @@ const Renderer = (() => {
   function createMessageBubble(content, pageInfo) {
     const wrapper = document.createElement('div');
     wrapper.className = 'ebook-message-wrapper';
-    wrapper.setAttribute('data-ebook-reader', 'true');
 
-    // 页码头部
     const header = document.createElement('div');
     header.className = 'ebook-page-header';
     header.textContent = pageInfo;
     wrapper.appendChild(header);
 
-    // 消息内容区域 — 使用 Markdown 渲染
     const contentDiv = document.createElement('div');
-    contentDiv.className = 'ebook-message-content markdown-body';
+    contentDiv.className = 'ebook-message-content';
     contentDiv.innerHTML = markdownToHtml(content);
 
     wrapper.appendChild(contentDiv);
     return wrapper;
   }
 
-  // 清除之前渲染的电子书内容
-  function clearRendered() {
-    isRendering = true;
-    const existing = document.getElementById(CONTAINER_ID);
-    if (existing) existing.remove();
-    isRendering = false;
+  // 获取或创建覆盖层（独立于 ChatGPT 的滚动容器）
+  function getOrCreateOverlay() {
+    let overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) return overlay;
+
+    // 找到 <main> 元素作为定位参考
+    const main = document.querySelector('main');
+    if (!main) return null;
+
+    // 确保 main 有定位上下文
+    const mainPosition = window.getComputedStyle(main).position;
+    if (mainPosition === 'static') {
+      main.style.position = 'relative';
+    }
+
+    overlay = document.createElement('div');
+    overlay.id = OVERLAY_ID;
+    overlay.className = 'ebook-overlay';
+    main.appendChild(overlay);
+
+    return overlay;
   }
 
-  // 渲染一批页面到聊天区域
+  // 清除渲染内容并移除覆盖层
+  function clearRendered() {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) overlay.remove();
+  }
+
+  // 渲染一批页面
   function renderBatch(pages, startPage, totalPages, bookTitle) {
-    isRendering = true;
+    // 移除旧覆盖层
+    clearRendered();
 
-    // 先移除旧内容
-    const existing = document.getElementById(CONTAINER_ID);
-    if (existing) existing.remove();
-
-    const chatContainer = findChatContainer();
-    if (!chatContainer) {
-      console.warn('[eBook Reader] 无法找到 ChatGPT 聊天容器');
-      isRendering = false;
+    const overlay = getOrCreateOverlay();
+    if (!overlay) {
+      console.warn('[eBook Reader] 无法找到 main 容器');
       return false;
     }
 
@@ -132,7 +124,7 @@ const Renderer = (() => {
     container.id = CONTAINER_ID;
     container.className = 'ebook-reader-section';
 
-    // 书籍标题分隔线
+    // 书籍标题
     const divider = document.createElement('div');
     divider.className = 'ebook-divider';
     divider.innerHTML = `<span>📖 ${escapeHtml(bookTitle)}</span>`;
@@ -153,13 +145,10 @@ const Renderer = (() => {
     footer.textContent = `显示第 ${startPage + 1}-${endPage} 页 | 使用快捷键翻页`;
     container.appendChild(footer);
 
-    // 插入到聊天容器底部（像 ChatGPT 新回复一样）
-    chatContainer.appendChild(container);
+    overlay.appendChild(container);
 
-    // 不自动滚动 — 用户自己往下阅读（类似 ChatGPT 回复了长消息）
-
-    // 延迟解除渲染锁，避免 observer 误触发
-    setTimeout(() => { isRendering = false; }, 300);
+    // 滚动到覆盖层顶部
+    overlay.scrollTop = 0;
 
     return true;
   }
@@ -170,38 +159,9 @@ const Renderer = (() => {
     return div.innerHTML;
   }
 
-  // 监听 DOM 变化，在 React 重新渲染后保留内容
-  function setupObserver(rerenderCallback) {
-    if (observer) observer.disconnect();
+  // 不再需要 MutationObserver — 覆盖层在 main 内独立存在，不会被 React 移除
+  function setupObserver() {}
+  function destroyObserver() {}
 
-    const chatContainer = findChatContainer();
-    if (!chatContainer) return;
-
-    observer = new MutationObserver(() => {
-      // 渲染过程中忽略变化
-      if (isRendering) return;
-
-      // 仅在容器确实被移除时才重新渲染
-      const ourContainer = document.getElementById(CONTAINER_ID);
-      if (!ourContainer && rerenderCallback) {
-        setTimeout(() => {
-          if (!document.getElementById(CONTAINER_ID)) {
-            rerenderCallback();
-          }
-        }, 500);
-      }
-    });
-
-    // 只监听直接子节点变化，不监听 subtree（减少误触发）
-    observer.observe(chatContainer, { childList: true, subtree: false });
-  }
-
-  function destroyObserver() {
-    if (observer) {
-      observer.disconnect();
-      observer = null;
-    }
-  }
-
-  return { renderBatch, clearRendered, setupObserver, destroyObserver, findChatContainer };
+  return { renderBatch, clearRendered, setupObserver, destroyObserver };
 })();

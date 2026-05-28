@@ -1,9 +1,42 @@
 /* 模拟 ChatGPT 回复消息的样式 */
 
+/* ====== 覆盖层 — 独立于 ChatGPT 滚动容器 ====== */
+.ebook-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 999;
+  /* 直接使用 ChatGPT 的 CSS 变量，自动跟随暗色/亮色主题 */
+  background: var(--main-surface-primary, #212121);
+  color: var(--text-primary, #d1d5db);
+  overscroll-behavior: contain;
+}
+
+/* 覆盖层滚动条 */
+.ebook-overlay::-webkit-scrollbar {
+  width: 6px;
+}
+.ebook-overlay::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ebook-overlay::-webkit-scrollbar-thumb {
+  background: var(--text-quaternary, rgba(255, 255, 255, 0.15));
+  border-radius: 3px;
+}
+.ebook-overlay::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary, rgba(255, 255, 255, 0.25));
+}
+
 /* ====== 电子书内容区域 ====== */
 .ebook-reader-section {
   width: 100%;
-  padding: 16px 0;
+  padding: 16px 24px;
+  max-width: 48rem;
+  margin: 0 auto;
 }
 
 .ebook-divider {
@@ -19,21 +52,21 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: linear-gradient(to right, transparent, rgba(142, 142, 160, 0.3), transparent);
+  background: linear-gradient(to right, transparent, var(--border-light, rgba(142, 142, 160, 0.3)), transparent);
 }
 
 .ebook-divider span {
   padding: 4px 16px;
   font-size: 14px;
   font-weight: 600;
-  color: #b4bcd0;
+  color: var(--text-secondary, #b4bcd0);
   white-space: nowrap;
 }
 
 /* ====== 消息气泡 ====== */
 .ebook-message-wrapper {
   padding: 18px 0;
-  border-bottom: 1px solid rgba(142, 142, 160, 0.08);
+  border-bottom: 1px solid var(--border-light, rgba(142, 142, 160, 0.08));
   max-width: 48rem;
   margin: 0 auto;
 }
@@ -45,7 +78,7 @@
 .ebook-page-header {
   font-size: 11px;
   font-weight: 600;
-  color: #8e8ea0;
+  color: var(--text-secondary, #8e8ea0);
   margin-bottom: 10px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -107,16 +140,16 @@
 }
 
 .ebook-message-content blockquote {
-  border-left: 3px solid rgba(142, 142, 160, 0.3);
+  border-left: 3px solid var(--border-light, rgba(142, 142, 160, 0.3));
   padding-left: 16px;
   margin: 12px 0;
-  color: #9ca3af;
+  color: var(--text-secondary, #9ca3af);
   font-style: italic;
 }
 
 .ebook-message-content hr {
   border: none;
-  border-top: 1px solid rgba(142, 142, 160, 0.2);
+  border-top: 1px solid var(--border-light, rgba(142, 142, 160, 0.2));
   margin: 20px 0;
 }
 
@@ -128,10 +161,10 @@
 .ebook-nav-hint {
   text-align: center;
   font-size: 12px;
-  color: #8e8ea0;
+  color: var(--text-secondary, #8e8ea0);
   padding: 16px 0;
   margin-top: 8px;
-  border-top: 1px solid rgba(142, 142, 160, 0.15);
+  border-top: 1px solid var(--border-light, rgba(142, 142, 160, 0.15));
 }
 
 /* ====== 状态指示器 ====== */
@@ -140,14 +173,14 @@
   bottom: 20px;
   right: 20px;
   width: 260px;
-  background: #2f2f2f;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--main-surface-secondary, #2f2f2f);
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.1));
   border-radius: 12px;
   padding: 14px 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   z-index: 10000;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #d1d5db;
+  color: var(--text-primary, #d1d5db);
   transition: all 0.3s ease;
 }
 
@@ -189,7 +222,7 @@
 .ebook-indicator-close {
   background: none;
   border: none;
-  color: #8e8ea0;
+  color: var(--text-secondary, #8e8ea0);
   cursor: pointer;
   font-size: 16px;
   padding: 0 2px;
@@ -197,7 +230,7 @@
 }
 
 .ebook-indicator-close:hover {
-  color: #fff;
+  color: var(--text-primary, #fff);
 }
 
 .ebook-indicator-progress {
@@ -206,7 +239,7 @@
 
 .ebook-indicator-pages {
   font-size: 12px;
-  color: #8e8ea0;
+  color: var(--text-secondary, #8e8ea0);
   display: block;
   margin-bottom: 6px;
 }
@@ -214,7 +247,7 @@
 .ebook-indicator-bar-container {
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border-light, rgba(255, 255, 255, 0.1));
   border-radius: 2px;
   overflow: hidden;
 }
@@ -228,7 +261,7 @@
 
 .ebook-indicator-status {
   font-size: 11px;
-  color: #8e8ea0;
+  color: var(--text-secondary, #8e8ea0);
 }
 
 .ebook-indicator-message {
@@ -247,39 +280,6 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ====== 亮色主题适配 ====== */
-@media (prefers-color-scheme: light) {
-  .ebook-message-content {
-    color: var(--text-primary, #374151);
-  }
-
-  .ebook-indicator {
-    background: #ffffff;
-    border-color: rgba(0, 0, 0, 0.1);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-    color: #374151;
-  }
-
-  .ebook-indicator-bar-container {
-    background: rgba(0, 0, 0, 0.06);
-  }
-}
-
-/* ChatGPT 暗色模式检测 */
-html.dark .ebook-message-content,
-[data-theme="dark"] .ebook-message-content {
-  color: #d1d5db;
-}
-
-html:not(.dark) .ebook-message-content,
-[data-theme="light"] .ebook-message-content {
-  color: #374151;
-}
-
-html:not(.dark) .ebook-indicator,
-[data-theme="light"] .ebook-indicator {
-  background: #ffffff;
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  color: #374151;
-}
+/* 主题自动跟随：所有颜色均使用 ChatGPT 的 CSS 变量（如 --main-surface-primary、
+   --text-primary、--border-light 等），无需单独的暗色/亮色覆写规则。
+   ChatGPT 切换主题时变量值自动变化，插件 UI 随之更新。 */

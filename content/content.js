@@ -28,18 +28,11 @@
 
     if (!settings.enabled) {
       Renderer.clearRendered();
-      Renderer.destroyObserver();
       Indicator.showMessage('插件已禁用');
     } else {
       Indicator.showMessage('插件已启用');
-      // 恢复渲染并重新建立 observer
       if (Navigator.getState().hasBook) {
         Navigator.renderCurrent();
-        Renderer.setupObserver(() => {
-          if (settings.enabled && Navigator.getState().hasBook) {
-            Navigator.renderCurrent();
-          }
-        });
       }
     }
   });
@@ -79,11 +72,6 @@
           // 等待 ChatGPT 页面完全加载后渲染
           setTimeout(() => {
             Navigator.renderCurrent();
-            Renderer.setupObserver(() => {
-              if (settings.enabled && Navigator.getState().hasBook) {
-                Navigator.renderCurrent(); // observer 重建不滚动
-              }
-            });
           }, 2000);
         }
         console.log(`[eBook Reader] 恢复阅读: ${book.title}, 批次 ${progress.batchIndex}`);
@@ -115,11 +103,6 @@
             Navigator.setBatchIndex(0);
             if (settings.enabled) {
               Navigator.renderCurrent();
-              Renderer.setupObserver(() => {
-                if (settings.enabled && Navigator.getState().hasBook) {
-                  Navigator.renderCurrent();
-                }
-              });
             }
             sendResponse({ success: true });
           } else {
