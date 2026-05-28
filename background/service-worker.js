@@ -81,7 +81,9 @@ chrome.runtime.onInstalled.addListener((details) => {
         shortcuts: {
           toggle: { alt: true, shift: true, key: 'e' },
           next: { alt: true, shift: true, key: 'ArrowRight' },
-          prev: { alt: true, shift: true, key: 'ArrowLeft' }
+          prev: { alt: true, shift: true, key: 'ArrowLeft' },
+          bookmark: { alt: true, shift: true, key: 'b' },
+          jumpBookmark: { alt: true, shift: true, key: 'j' }
         }
       }
     });
@@ -120,7 +122,8 @@ async function handleMessage(message, sender) {
     // ---- 转发消息到 content script ----
     case 'LOAD_BOOK':
     case 'UPDATE_SETTINGS':
-    case 'REPARSE_BOOK': {
+    case 'REPARSE_BOOK':
+    case 'JUMP_BOOKMARK': {
       return forwardToContentScript(message);
     }
 

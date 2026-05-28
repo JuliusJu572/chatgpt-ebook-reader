@@ -41,6 +41,10 @@
       <div class="bookshelf" id="bookshelf">
         <p class="empty-hint">暂无电子书，请先上传</p>
       </div>
+      <div class="bookmarks-section" id="bookmarksSection" style="display:none">
+        <h3 class="section-title">🔖 书签</h3>
+        <div class="bookmarks-list" id="bookmarksList"></div>
+      </div>
     </div>
 
     <!-- 设置标签页 -->
@@ -73,6 +77,18 @@
         <label>上一批</label>
         <div class="shortcut-input" id="shortcut-prev" tabindex="0" data-action="prev">
           Alt + Shift + ←
+        </div>
+      </div>
+      <div class="settings-group">
+        <label>添加/移除书签</label>
+        <div class="shortcut-input" id="shortcut-bookmark" tabindex="0" data-action="bookmark">
+          Alt + Shift + B
+        </div>
+      </div>
+      <div class="settings-group">
+        <label>跳转下一书签</label>
+        <div class="shortcut-input" id="shortcut-jumpBookmark" tabindex="0" data-action="jumpBookmark">
+          Alt + Shift + J
         </div>
       </div>
 

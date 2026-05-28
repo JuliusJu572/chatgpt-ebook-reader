@@ -95,11 +95,19 @@ const Navigator = (() => {
   function getState() {
     return {
       hasBook: !!currentBook,
+      bookId: currentBook?.id,
       batchIndex,
       totalBatches: getTotalBatches(),
       bookTitle: currentBook?.title
     };
   }
 
-  return { setBook, setConfig, setBatchIndex, getCurrentPages, renderCurrent, nextBatch, prevBatch, getState };
+  function jumpToBatch(index) {
+    if (!currentBook) return false;
+    if (index < 0 || index >= getTotalBatches()) return false;
+    batchIndex = index;
+    return renderCurrent();
+  }
+
+  return { setBook, setConfig, setBatchIndex, getCurrentPages, renderCurrent, nextBatch, prevBatch, getState, jumpToBatch };
 })();

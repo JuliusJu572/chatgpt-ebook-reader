@@ -53,6 +53,36 @@
     Navigator.prevBatch();
   });
 
+  ShortcutManager.on('bookmark', async () => {
+    const state = Navigator.getState();
+    if (!state.hasBook) {
+      Indicator.showMessage('请先在插件中上传电子书');
+      return;
+    }
+    const label = `第 ${state.batchIndex * settings.pagesPerBatch + 1} 页`;
+    const added = await Bookmarks.toggle(state.bookId, state.batchIndex, label);
+    if (added) {
+      Indicator.showMessage(`🔖 已添加书签 (批次 ${state.batchIndex + 1})`);
+    } else {
+      Indicator.showMessage(`❌ 已移除书签 (批次 ${state.batchIndex + 1})`);
+    }
+  });
+
+  ShortcutManager.on('jumpBookmark', async () => {
+    const state = Navigator.getState();
+    if (!state.hasBook) {
+      Indicator.showMessage('请先在插件中上传电子书');
+      return;
+    }
+    const next = await Bookmarks.findNext(state.bookId, state.batchIndex);
+    if (!next) {
+      Indicator.showMessage('📭 没有书签，按 Alt+Shift+B 添加');
+      return;
+    }
+    Navigator.jumpToBatch(next.batchIndex);
+    Indicator.showMessage(`🔖 跳转到书签: ${next.label}`);
+  });
+
   // 尝试恢复上次阅读进度
   const progress = await ReadingProgress.get();
   if (progress && progress.bookId) {
@@ -117,6 +147,17 @@
           ShortcutManager.updateSettings(settings);
           Navigator.setConfig({ pagesPerBatch: settings.pagesPerBatch });
           Indicator.setEnabled(settings.enabled);
+          sendResponse({ success: true });
+          break;
+        }
+
+        case 'JUMP_BOOKMARK': {
+          if (!Navigator.getState().hasBook) {
+            sendResponse({ success: false, error: '未加载书籍' });
+            break;
+          }
+          Navigator.jumpToBatch(message.batchIndex);
+          Indicator.showMessage(`🔖 跳转到批次 ${message.batchIndex + 1}`);
           sendResponse({ success: true });
           break;
         }

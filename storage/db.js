@@ -54,7 +54,9 @@ const Settings = (() => {
     shortcuts: {
       toggle: { alt: true, shift: true, key: 'e' },
       next: { alt: true, shift: true, key: 'ArrowRight' },
-      prev: { alt: true, shift: true, key: 'ArrowLeft' }
+      prev: { alt: true, shift: true, key: 'ArrowLeft' },
+      bookmark: { alt: true, shift: true, key: 'b' },
+      jumpBookmark: { alt: true, shift: true, key: 'j' }
     }
   };
 
@@ -99,4 +101,67 @@ const ReadingProgress = (() => {
   }
 
   return { get, set, clear };
+})();
+
+// 书签管理
+const Bookmarks = (() => {
+  function _key(bookId) { return `bookmarks_${bookId}`; }
+
+  async function getAll(bookId) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(_key(bookId), (result) => {
+        resolve(result[_key(bookId)] || []);
+      });
+    });
+  }
+
+  async function _save(bookId, list) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [_key(bookId)]: list }, resolve);
+    });
+  }
+
+  async function add(bookId, batchIndex, label) {
+    const list = await getAll(bookId);
+    // 同一 batch 不重复添加
+    if (list.some(b => b.batchIndex === batchIndex)) return false;
+    list.push({ batchIndex, label, createdAt: new Date().toISOString() });
+    list.sort((a, b) => a.batchIndex - b.batchIndex);
+    await _save(bookId, list);
+    return true;
+  }
+
+  async function remove(bookId, batchIndex) {
+    let list = await getAll(bookId);
+    list = list.filter(b => b.batchIndex !== batchIndex);
+    await _save(bookId, list);
+  }
+
+  async function toggle(bookId, batchIndex, label) {
+    const list = await getAll(bookId);
+    const exists = list.some(b => b.batchIndex === batchIndex);
+    if (exists) {
+      await remove(bookId, batchIndex);
+      return false; // removed
+    } else {
+      await add(bookId, batchIndex, label);
+      return true; // added
+    }
+  }
+
+  // 找到当前 batch 之后的下一个书签（循环）
+  async function findNext(bookId, currentBatch) {
+    const list = await getAll(bookId);
+    if (list.length === 0) return null;
+    const after = list.find(b => b.batchIndex > currentBatch);
+    return after || list[0]; // 循环到第一个
+  }
+
+  async function removeAll(bookId) {
+    return new Promise((resolve) => {
+      chrome.storage.local.remove(_key(bookId), resolve);
+    });
+  }
+
+  return { getAll, add, remove, toggle, findNext, removeAll };
 })();

@@ -275,4 +275,47 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 初始加载书架
   await loadBookshelf();
+  await loadBookmarks();
+
+  async function loadBookmarks() {
+    const section = document.getElementById('bookmarksSection');
+    const list = document.getElementById('bookmarksList');
+    const progress = await ReadingProgress.get();
+    if (!progress || !progress.bookId) {
+      section.style.display = 'none';
+      return;
+    }
+    const bookmarks = await Bookmarks.getAll(progress.bookId);
+    if (bookmarks.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+    list.innerHTML = bookmarks.map(bm => `
+      <div class="bookmark-item" data-batch="${bm.batchIndex}">
+        <span class="bookmark-label">🔖 ${escapeHtml(bm.label)}</span>
+        <div class="bookmark-actions">
+          <button class="book-btn jump" title="跳转" data-batch="${bm.batchIndex}">📖</button>
+          <button class="book-btn del-bm" title="删除" data-batch="${bm.batchIndex}">✕</button>
+        </div>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('.book-btn.jump').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const batch = parseInt(btn.dataset.batch);
+        sendToContent({ type: 'JUMP_BOOKMARK', batchIndex: batch });
+        setStatus(`跳转到批次 ${batch + 1}`);
+      });
+    });
+
+    list.querySelectorAll('.book-btn.del-bm').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const batch = parseInt(btn.dataset.batch);
+        await Bookmarks.remove(progress.bookId, batch);
+        await loadBookmarks();
+        setStatus('书签已删除');
+      });
+    });
+  }
 });

@@ -132,7 +132,7 @@ const Renderer = (() => {
   // 在内容注入期间冻结滚动位置，防止 react-scroll-to-bottom 自动滚到底部。
   // 用户主动滚动（wheel/touch）时立即解锁。
 
-  function withScrollLock(scrollContainer, fn) {
+  function withScrollLock(scrollContainer, fn, scrollTarget) {
     if (!scrollContainer) { fn(); return; }
 
     const savedTop = scrollContainer.scrollTop;
@@ -172,8 +172,12 @@ const Renderer = (() => {
       scrollContainer.scroll = origScroll;
       scrollContainer.removeEventListener('wheel', unlock);
       scrollContainer.removeEventListener('touchmove', unlock);
-      // 恢复到注入前的位置
-      try { desc.set.call(scrollContainer, savedTop); } catch (_) {}
+      // 滚动到目标元素顶部（电子书内容开头），否则恢复原位
+      if (scrollTarget) {
+        try { scrollTarget.scrollIntoView({ behavior: 'instant', block: 'start' }); } catch (_) {}
+      } else {
+        try { desc.set.call(scrollContainer, savedTop); } catch (_) {}
+      }
     }
   }
 
@@ -214,11 +218,11 @@ const Renderer = (() => {
     footer.textContent = `显示第 ${startPage + 1}-${endPage} 页 | 使用快捷键翻页`;
     container.appendChild(footer);
 
-    // 在滚动锁定保护下注入到聊天底部
+    // 在滚动锁定保护下注入到聊天底部，解锁后滚动到内容开头
     const scrollContainer = findScrollContainer();
     withScrollLock(scrollContainer, () => {
       chatContainer.appendChild(container);
-    });
+    }, container);
 
     return true;
   }
