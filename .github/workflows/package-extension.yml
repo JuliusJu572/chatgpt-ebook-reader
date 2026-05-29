@@ -8,6 +8,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   package:
     name: Build loadable extension artifact
@@ -16,9 +19,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Validate manifest
         run: node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
+
+      - name: Read extension version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(node -p "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8')).version")"
+          if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+){1,3}$ ]]; then
+            echo "::error::manifest.json version must be 2 to 4 dot-separated integers, got '$version'."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "zip_name=chatgpt-ebook-reader-v$version.zip" >> "$GITHUB_OUTPUT"
 
       - name: Check JavaScript syntax
         run: |
@@ -56,16 +74,45 @@ jobs:
         run: |
           set -euo pipefail
           cd dist/chatgpt-ebook-reader
-          zip -r ../chatgpt-ebook-reader.zip .
+          zip -r "../${{ steps.version.outputs.zip_name }}" .
 
       - name: Upload load-unpacked artifact
         uses: actions/upload-artifact@v4
         with:
-          name: chatgpt-ebook-reader-load-unpacked
+          name: chatgpt-ebook-reader-v${{ steps.version.outputs.version }}-load-unpacked
           path: dist/chatgpt-ebook-reader
 
       - name: Upload zip package
         uses: actions/upload-artifact@v4
         with:
-          name: chatgpt-ebook-reader-zip
-          path: dist/chatgpt-ebook-reader.zip
+          name: chatgpt-ebook-reader-v${{ steps.version.outputs.version }}-zip
+          path: dist/${{ steps.version.outputs.zip_name }}
+
+      - name: Publish GitHub release
+        if: github.event_name != 'pull_request' && (github.ref_name == 'master' || github.ref_name == 'main')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          ZIP_PATH: dist/${{ steps.version.outputs.zip_name }}
+        run: |
+          set -euo pipefail
+
+          if git rev-parse "$RELEASE_TAG" >/dev/null 2>&1; then
+            tag_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+            if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+              echo "::error::Release tag $RELEASE_TAG already exists on $tag_sha. Bump manifest.json version before publishing a new release."
+              exit 1
+            fi
+          else
+            git tag "$RELEASE_TAG" "$GITHUB_SHA"
+            git push origin "$RELEASE_TAG"
+          fi
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ZIP_PATH" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$ZIP_PATH" \
+              --title "ChatGPT eBook Reader $RELEASE_TAG" \
+              --notes "Chrome extension package built from $GITHUB_SHA." \
+              --target "$GITHUB_SHA"
+          fi
