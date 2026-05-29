@@ -51,6 +51,8 @@
 | 下一批（向后翻页）| `Alt + Shift + →` |
 | 上一批（向前翻页）| `Alt + Shift + ←` |
 
+macOS 新安装默认使用 `⌘ + ⇧ + E`、`⌘ + ⇧ + →`、`⌘ + ⇧ + ←`。录制快捷键时会按平台显示为 `⌘`、`⌥`、`⇧`、`⌃`；已保存为 `Ctrl` 的快捷键在 macOS 上也可以用 `Command` 触发。
+
 > 所有快捷键均可在 Popup 的「设置」标签页中自定义。
 
 启用阅读器时，当前批次会作为一条独立的阅读消息追加到最后一条 ChatGPT 对话消息下方；禁用阅读器时会移除阅读消息，并滚动回最后一条原生对话消息附近。
@@ -61,6 +63,13 @@
 |------|--------|------|
 | 每页字数 | 2000 | 每"页"包含的字符数 |
 | 每批页数 | 10 | 每次翻页渲染的页数 |
+
+## 📦 GitHub Actions 打包
+
+每次推送到 `master` / `main`、提交 Pull Request，或手动运行 `Package Extension` workflow 后，Actions 会生成两个 artifact：
+
+- `chatgpt-ebook-reader-load-unpacked`：下载并解压后，在 `chrome://extensions/` 中通过「加载已解压的扩展程序」选择该目录即可。
+- `chatgpt-ebook-reader-zip`：同一份扩展源码的 zip 包。
 
 ## 🏗️ 技术架构
 

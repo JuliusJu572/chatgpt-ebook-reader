@@ -51,11 +51,7 @@ const Settings = (() => {
     charsPerPage: 2000,
     pagesPerBatch: 10,
     enabled: true,
-    shortcuts: {
-      toggle: { alt: true, shift: true, key: 'e' },
-      next: { alt: true, shift: true, key: 'ArrowRight' },
-      prev: { alt: true, shift: true, key: 'ArrowLeft' }
-    }
+    shortcuts: ShortcutUtils.getDefaultShortcuts()
   };
 
   async function get() {

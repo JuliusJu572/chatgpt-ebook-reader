@@ -7,13 +7,7 @@ const ShortcutManager = (() => {
   let handlers = {};
 
   function matchesShortcut(event, shortcutDef) {
-    if (!shortcutDef) return false;
-    const altMatch = !!shortcutDef.alt === event.altKey;
-    const shiftMatch = !!shortcutDef.shift === event.shiftKey;
-    const ctrlMatch = !!shortcutDef.ctrl === event.ctrlKey;
-    const metaMatch = !!shortcutDef.meta === event.metaKey;
-    const keyMatch = event.key.toLowerCase() === shortcutDef.key.toLowerCase();
-    return altMatch && shiftMatch && ctrlMatch && metaMatch && keyMatch;
+    return ShortcutUtils.matches(event, shortcutDef);
   }
 
   function handleKeyDown(event) {

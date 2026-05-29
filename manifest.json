@@ -35,6 +35,7 @@
       ],
       "js": [
         "lib/parser.js",
+        "lib/shortcut-utils.js",
         "storage/db.js",
         "content/shortcut.js",
         "content/dom-adapter.js",

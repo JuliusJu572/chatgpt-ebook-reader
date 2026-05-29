@@ -71,6 +71,28 @@ async function dbDeleteBook(id) {
 }
 
 // ===== 安装事件 =====
+function isMacOS() {
+  const platform = navigator.userAgentData?.platform || navigator.platform || '';
+  const userAgent = navigator.userAgent || '';
+  return /mac|iphone|ipad|ipod/i.test(platform) || /mac os|iphone|ipad|ipod/i.test(userAgent);
+}
+
+function getDefaultShortcuts() {
+  if (isMacOS()) {
+    return {
+      toggle: { meta: true, shift: true, key: 'e' },
+      next: { meta: true, shift: true, key: 'ArrowRight' },
+      prev: { meta: true, shift: true, key: 'ArrowLeft' }
+    };
+  }
+
+  return {
+    toggle: { alt: true, shift: true, key: 'e' },
+    next: { alt: true, shift: true, key: 'ArrowRight' },
+    prev: { alt: true, shift: true, key: 'ArrowLeft' }
+  };
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     chrome.storage.local.set({
@@ -78,11 +100,7 @@ chrome.runtime.onInstalled.addListener((details) => {
         charsPerPage: 2000,
         pagesPerBatch: 10,
         enabled: true,
-        shortcuts: {
-          toggle: { alt: true, shift: true, key: 'e' },
-          next: { alt: true, shift: true, key: 'ArrowRight' },
-          prev: { alt: true, shift: true, key: 'ArrowLeft' }
-        }
+        shortcuts: getDefaultShortcuts()
       }
     });
     console.log('[eBook Reader] 扩展安装完成');

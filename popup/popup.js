@@ -185,16 +185,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     input.addEventListener('keydown', (e) => {
       e.preventDefault();
-      if (['Alt', 'Shift', 'Control', 'Meta'].includes(e.key)) return;
+      if (ShortcutUtils.isModifierKey(e.key)) return;
 
-      const shortcut = {
-        alt: e.altKey,
-        shift: e.shiftKey,
-        ctrl: e.ctrlKey,
-        meta: e.metaKey,
-        key: e.key
-      };
-
+      const shortcut = ShortcutUtils.fromEvent(e);
       const action = input.dataset.action;
       settings.shortcuts[action] = shortcut;
       input.textContent = formatShortcut(shortcut);
@@ -259,23 +252,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function formatShortcut(shortcut) {
-    const parts = [];
-    if (shortcut.ctrl) parts.push('Ctrl');
-    if (shortcut.alt) parts.push('Alt');
-    if (shortcut.shift) parts.push('Shift');
-    if (shortcut.meta) parts.push('Meta');
-
-    let keyName = shortcut.key;
-    const keyMap = {
-      'ArrowRight': '→', 'ArrowLeft': '←',
-      'ArrowUp': '↑', 'ArrowDown': '↓',
-      ' ': 'Space'
-    };
-    if (keyMap[keyName]) keyName = keyMap[keyName];
-    else keyName = keyName.toUpperCase();
-
-    parts.push(keyName);
-    return parts.join(' + ');
+    return ShortcutUtils.format(shortcut);
   }
 
   function formatSize(chars) {

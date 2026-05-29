@@ -1,0 +1,71 @@
+name: Package Extension
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  package:
+    name: Build loadable extension artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate manifest
+        run: node -e "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8'))"
+
+      - name: Check JavaScript syntax
+        run: |
+          set -euo pipefail
+          for file in \
+            background/service-worker.js \
+            content/*.js \
+            popup/popup.js \
+            storage/db.js \
+            lib/parser.js \
+            lib/shortcut-utils.js
+          do
+            node --check "$file"
+          done
+
+      - name: Prepare unpacked extension
+        run: |
+          set -euo pipefail
+          mkdir -p dist/chatgpt-ebook-reader
+          cp -R \
+            background \
+            content \
+            icons \
+            lib \
+            popup \
+            storage \
+            styles \
+            chatgpt-page.html \
+            manifest.json \
+            README.md \
+            LICENSE \
+            dist/chatgpt-ebook-reader/
+
+      - name: Create zip package
+        run: |
+          set -euo pipefail
+          cd dist/chatgpt-ebook-reader
+          zip -r ../chatgpt-ebook-reader.zip .
+
+      - name: Upload load-unpacked artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-ebook-reader-load-unpacked
+          path: dist/chatgpt-ebook-reader
+
+      - name: Upload zip package
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-ebook-reader-zip
+          path: dist/chatgpt-ebook-reader.zip
