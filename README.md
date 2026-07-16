@@ -1,6 +1,6 @@
-# 📖 ChatGPT eBook Reader
+# 📖 ChatGPT & 豆包 eBook Reader
 
-一款 Chrome 扩展，让你在 ChatGPT 界面中阅读电子书。书籍内容以 ChatGPT 回复消息的样式渲染在聊天区域，提供沉浸式阅读体验。
+一款 Chrome 扩展，让你在 ChatGPT 或 豆包（doubao.com）界面中阅读电子书。书籍内容以对话回复消息的样式渲染在聊天区域，提供沉浸式阅读体验。
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-green?logo=googlechrome)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-blue)
@@ -110,9 +110,14 @@ chatgpt-ebook-reader/
 
 ## ⚠️ 已知限制
 
-- ChatGPT 的 DOM 结构可能随版本更新变化，渲染引擎中的选择器可能需要相应调整
+- ChatGPT / 豆包 的 DOM 结构可能随版本更新变化，渲染引擎中的选择器可能需要相应调整
 - 超大 PDF 文件（>50MB）解析可能较慢
-- 仅支持 ChatGPT 网页版（chatgpt.com / chat.openai.com）
+- 仅支持 ChatGPT 网页版（chatgpt.com / chat.openai.com）以及 豆包 网页版（www.doubao.com）
+
+### 站点适配差异
+
+- **ChatGPT**：阅读内容作为一条独立消息，追加到最后一条原生对话消息之后（sibling-after-last-turn 策略）。
+- **豆包**：由于豆包使用虚拟列表渲染消息，阅读器以覆盖层形式挂到消息列表容器（`[class*="message-list-"]`）中，临时隐藏虚拟消息列表，退出阅读器时自动恢复。
 
 ## 🤝 贡献
 

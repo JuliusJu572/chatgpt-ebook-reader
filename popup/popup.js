@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 通过 service worker 转发，确保消息可靠送达
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
-        setStatus('⚠️ 请先打开 ChatGPT 页面');
+        setStatus('⚠️ 请先打开 ChatGPT 或 豆包 页面');
         console.warn('消息发送失败:', chrome.runtime.lastError.message);
       } else if (response && response.success === false) {
         setStatus(`⚠️ ${response.error || '操作失败'}`);

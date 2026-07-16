@@ -4,3 +4,5 @@ package-lock.json
 *.log
 .DS_Store
 Thumbs.db
+.playwright-cli/
+dist/

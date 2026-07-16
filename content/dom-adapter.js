@@ -1,20 +1,97 @@
 /**
- * ChatGPT DOM 适配层
- * 集中处理页面结构定位，避免渲染逻辑误插到输入框或布局容器中。
+ * DOM 适配层（ChatGPT / 豆包）
+ * 根据 hostname 选择对应的 SiteProfile，集中处理页面结构定位，
+ * 避免渲染逻辑误插到输入框或布局容器中。
  */
 
 const ChatDomAdapter = (() => {
   const READER_TURN_SELECTOR = '[data-ebook-reader-turn="true"]';
 
-  function findScrollContainer() {
-    const selectors = [
+  // ================== SiteProfile 抽象 ==================
+  // 每个站点提供：
+  //   scrollSelectors: string[] 用于寻找滚动容器的候选选择器
+  //   composerSelector: string   输入框相关元素选择器
+  //   composerCloseSelectors: string[] 输入框最外层包装选择器
+  //   turnSelectors: string[]   原生消息的候选选择器
+  //   isMessageNode(el): boolean 判断给定节点是否是消息元素
+  //   normalizeTurn(node): Element | null 把命中节点归一化到"整条消息"
+  //   findConversationContainer(): Element | null (可选) 自定义会话容器
+  //   mountStrategy: 'sibling-after-last-turn' | 'overlay-in-message-list'
+  //   overlayHostSelector?: string (mountStrategy 为 overlay 时用)
+
+  const ChatGPTProfile = {
+    name: 'chatgpt',
+    scrollSelectors: [
       'div[class*="react-scroll-to-bottom"] > div',
       'main .overflow-y-auto',
       'main div[class*="overflow-y-auto"]'
-    ];
+    ],
+    composerSelector:
+      '#prompt-textarea, [data-testid="composer-root"], textarea, [contenteditable="true"][role="textbox"], [contenteditable="true"]',
+    composerWrapSelectors: ['[data-testid="composer-root"]', 'form'],
+    turnSelectors: [
+      '[data-testid^="conversation-turn"]',
+      'article',
+      '[data-message-author-role]'
+    ],
+    isTurnMatch(node) {
+      return node.matches('[data-testid^="conversation-turn"], article');
+    },
+    isRenderableTurn(el) {
+      return !!el.querySelector('[data-message-author-role]')
+        || el.matches('[data-testid^="conversation-turn"], article')
+        || !!el.textContent.trim();
+    },
+    mountStrategy: 'sibling-after-last-turn'
+  };
 
+  const DoubaoProfile = {
+    name: 'doubao',
+    scrollSelectors: [
+      '[class*="v_list_scroller"]',
+      'main [class*="overflow-y-auto"]'
+    ],
+    composerSelector: '#input-engine-container textarea, textarea.semi-input-textarea, #input-engine-container',
+    composerWrapSelectors: ['#input-engine-container'],
+    turnSelectors: [
+      '.v_list_row',
+      '[data-target-id="message-box-target-id"]'
+    ],
+    isTurnMatch(node) {
+      return node.matches('.v_list_row');
+    },
+    isRenderableTurn(el) {
+      if (!el.matches('.v_list_row')) return false;
+      // 跳过虚拟列表首尾占位行（textContent 为空、高度极小）
+      if (!el.textContent.trim() && el.offsetHeight < 20) return false;
+      return true;
+    },
+    normalizeTurn(node) {
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
+      if (node.matches('.v_list_row')) return node;
+      const row = node.closest('.v_list_row');
+      return row || null;
+    },
+    findConversationContainer() {
+      return document.querySelector('[class*="message-list-"]');
+    },
+    mountStrategy: 'overlay-in-message-list',
+    overlayHostSelector: '[class*="message-list-"]'
+  };
+
+  function detectProfile() {
+    const host = location.hostname;
+    if (host.includes('doubao.com')) return DoubaoProfile;
+    return ChatGPTProfile;
+  }
+
+  const profile = detectProfile();
+
+  // ================== 通用逻辑 ==================
+
+  function findScrollContainer() {
     let fallback = null;
-    for (const sel of selectors) {
+    for (const sel of profile.scrollSelectors) {
       for (const el of document.querySelectorAll(sel)) {
         const cs = window.getComputedStyle(el);
         if (cs.overflowY !== 'auto' && cs.overflowY !== 'scroll') continue;
@@ -45,26 +122,21 @@ const ChatDomAdapter = (() => {
   }
 
   function findComposer() {
-    const prompt = document.querySelector(
-      '#prompt-textarea, [data-testid="composer-root"], textarea, [contenteditable="true"][role="textbox"], [contenteditable="true"]'
-    );
+    const prompt = document.querySelector(profile.composerSelector);
     if (!prompt) return null;
-    return prompt.closest('[data-testid="composer-root"]')
-      || prompt.closest('form')
-      || prompt;
+    for (const sel of profile.composerWrapSelectors) {
+      const wrap = prompt.closest(sel);
+      if (wrap) return wrap;
+    }
+    return prompt;
   }
 
   function findNativeTurns() {
     const main = document.querySelector('main') || document.body;
     const turns = [];
     const seen = new Set();
-    const selectors = [
-      '[data-testid^="conversation-turn"]',
-      'article',
-      '[data-message-author-role]'
-    ];
 
-    for (const selector of selectors) {
+    for (const selector of profile.turnSelectors) {
       for (const node of main.querySelectorAll(selector)) {
         const turn = normalizeTurnElement(node);
         if (!turn || seen.has(turn)) continue;
@@ -83,7 +155,12 @@ const ChatDomAdapter = (() => {
 
   function normalizeTurnElement(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
-    if (node.matches('[data-testid^="conversation-turn"], article')) return node;
+
+    if (typeof profile.normalizeTurn === 'function') {
+      return profile.normalizeTurn(node);
+    }
+
+    if (profile.isTurnMatch(node)) return node;
 
     const testIdTurn = node.closest('[data-testid^="conversation-turn"]');
     if (testIdTurn) return testIdTurn;
@@ -106,6 +183,9 @@ const ChatDomAdapter = (() => {
   }
 
   function isRenderableTurn(el) {
+    if (typeof profile.isRenderableTurn === 'function') {
+      return profile.isRenderableTurn(el);
+    }
     if (!isVisible(el) && !el.textContent.trim()) return false;
     return !!el.querySelector('[data-message-author-role]')
       || el.matches('[data-testid^="conversation-turn"], article')
@@ -123,6 +203,11 @@ const ChatDomAdapter = (() => {
   }
 
   function findConversationContainer() {
+    if (typeof profile.findConversationContainer === 'function') {
+      const c = profile.findConversationContainer();
+      if (c) return c;
+    }
+
     const turns = findNativeTurns();
     const composer = findComposer();
     const lastTurn = turns.length ? turns[turns.length - 1] : null;
@@ -144,6 +229,11 @@ const ChatDomAdapter = (() => {
     return null;
   }
 
+  function findOverlayHost() {
+    if (!profile.overlayHostSelector) return null;
+    return document.querySelector(profile.overlayHostSelector);
+  }
+
   function findDeepestCommonAncestor(elements) {
     let current = elements[0]?.parentElement || null;
     while (current) {
@@ -155,13 +245,19 @@ const ChatDomAdapter = (() => {
 
   function validateReaderMount(readerTurn) {
     const composer = findComposer();
-    const conversation = findConversationContainer();
     if (!readerTurn || !readerTurn.isConnected) {
       return { ok: false, reason: 'reader 未插入页面' };
     }
     if (composer && (readerTurn.contains(composer) || composer.contains(readerTurn))) {
       return { ok: false, reason: 'reader 被插入到输入框区域' };
     }
+
+    // overlay 策略跳过 conversation container 包含性检查（reader 就在 message-list 内）
+    if (profile.mountStrategy === 'overlay-in-message-list') {
+      return { ok: true };
+    }
+
+    const conversation = findConversationContainer();
     if (conversation && !conversation.contains(readerTurn)) {
       return { ok: false, reason: 'reader 不在消息列表容器中' };
     }
@@ -173,7 +269,7 @@ const ChatDomAdapter = (() => {
 
   function stabilizeScrollToElement(element, block = 'start', options = {}) {
     if (!element) return;
-    const scrollContainer = findScrollContainer();
+    const scrollContainer = resolveScrollContainerFor(element);
     const duration = options.duration ?? 650;
     let cancelled = false;
     const startedAt = performance.now();
@@ -198,6 +294,19 @@ const ChatDomAdapter = (() => {
       scrollContainer.removeEventListener('wheel', cancel);
       scrollContainer.removeEventListener('touchmove', cancel);
     }
+  }
+
+  // Reader 使用自己的滚动容器（Doubao overlay 场景），此时优先滚动 reader 内部容器
+  function resolveScrollContainerFor(element) {
+    if (!element) return findScrollContainer();
+    const readerScroll = element.closest('.ebook-reader-scroll');
+    if (readerScroll) return readerScroll;
+    const readerTurn = element.closest(READER_TURN_SELECTOR);
+    if (readerTurn) {
+      const innerScroll = readerTurn.querySelector('.ebook-reader-scroll');
+      if (innerScroll && innerScroll.contains(element)) return innerScroll;
+    }
+    return findScrollContainer();
   }
 
   function getTargetScrollTop(scrollContainer, element, block) {
@@ -236,13 +345,19 @@ const ChatDomAdapter = (() => {
     }
   }
 
+  function getProfile() {
+    return profile;
+  }
+
   return {
     findScrollContainer,
     findComposer,
     findNativeTurns,
     findLastNativeTurn,
     findConversationContainer,
+    findOverlayHost,
     validateReaderMount,
-    stabilizeScrollToElement
+    stabilizeScrollToElement,
+    getProfile
   };
 })();

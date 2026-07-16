@@ -155,16 +155,21 @@ async function handleMessage(message, sender) {
 }
 
 async function forwardToContentScript(message) {
+  const SUPPORTED_URLS = [
+    'https://chatgpt.com/*',
+    'https://chat.openai.com/*',
+    'https://www.doubao.com/*'
+  ];
   const activeTabs = await chrome.tabs.query({
     active: true,
     currentWindow: true,
-    url: ['https://chatgpt.com/*', 'https://chat.openai.com/*']
+    url: SUPPORTED_URLS
   });
   const tabs = activeTabs.length > 0 ? activeTabs : await chrome.tabs.query({
-    url: ['https://chatgpt.com/*', 'https://chat.openai.com/*']
+    url: SUPPORTED_URLS
   });
   if (tabs.length === 0) {
-    return { success: false, error: '未找到 ChatGPT 标签页' };
+    return { success: false, error: '未找到 ChatGPT / 豆包 标签页' };
   }
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(tabs[0].id, message, (response) => {
