@@ -73,10 +73,22 @@ const ChatDomAdapter = (() => {
       return row || null;
     },
     findConversationContainer() {
-      return document.querySelector('[class*="message-list-"]');
+      // 挂载父容器：虚拟列表的 scroller_content（虚拟行与 reader 的公共父）
+      return document.querySelector('[class*="v_list_scroller"] .scroller_content')
+          || document.querySelector('[class*="message-list-"]');
     },
-    mountStrategy: 'overlay-in-message-list',
-    overlayHostSelector: '[class*="message-list-"]'
+    mountStrategy: 'append-in-scroller-content',
+    // 计算虚拟列表当前的总内容高度：scroll_holder.transform 的 Y 值（大小锚）
+    computeVirtualListHeight() {
+      const holder = document.querySelector('[class*="v_list_scroller"] .scroll_holder, [data-name="scroll_holder"]');
+      if (!holder) return 0;
+      const m = getComputedStyle(holder).transform.match(/matrix\(([^)]+)\)/);
+      if (m) {
+        const parts = m[1].split(',').map(s => parseFloat(s.trim()));
+        if (parts.length >= 6) return parts[5] || 0;
+      }
+      return holder.offsetTop || 0;
+    }
   };
 
   function detectProfile() {
@@ -230,8 +242,21 @@ const ChatDomAdapter = (() => {
   }
 
   function findOverlayHost() {
+    // 兼容旧策略（若 profile 仍定义了 overlayHostSelector）
     if (!profile.overlayHostSelector) return null;
     return document.querySelector(profile.overlayHostSelector);
+  }
+
+  function findScrollerContent() {
+    // 豆包虚拟列表的 scroller_content 容器（挂载父）
+    return document.querySelector('[class*="v_list_scroller"] .scroller_content');
+  }
+
+  function computeVirtualListHeight() {
+    if (typeof profile.computeVirtualListHeight === 'function') {
+      return profile.computeVirtualListHeight();
+    }
+    return 0;
   }
 
   function findDeepestCommonAncestor(elements) {
@@ -252,8 +277,17 @@ const ChatDomAdapter = (() => {
       return { ok: false, reason: 'reader 被插入到输入框区域' };
     }
 
-    // overlay 策略跳过 conversation container 包含性检查（reader 就在 message-list 内）
+    // overlay 策略跳过 conversation container 包含性检查
     if (profile.mountStrategy === 'overlay-in-message-list') {
+      return { ok: true };
+    }
+
+    // append-in-scroller 策略：只要 reader 在 scroller_content 内即算成功
+    if (profile.mountStrategy === 'append-in-scroller-content') {
+      const sc = findScrollerContent();
+      if (sc && !sc.contains(readerTurn)) {
+        return { ok: false, reason: 'reader 不在虚拟滚动容器中' };
+      }
       return { ok: true };
     }
 
@@ -356,6 +390,8 @@ const ChatDomAdapter = (() => {
     findLastNativeTurn,
     findConversationContainer,
     findOverlayHost,
+    findScrollerContent,
+    computeVirtualListHeight,
     validateReaderMount,
     stabilizeScrollToElement,
     getProfile

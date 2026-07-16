@@ -6,47 +6,52 @@
   flex: 0 0 auto;
 }
 
-/* ====== 豆包 overlay 模式 ======
-   在豆包页面上，reader 以覆盖层形式挂到消息列表容器中，
-   占据整个消息区并允许自己滚动。虚拟消息列表通过 .ebook-reader-native-hidden 临时隐藏。 */
-.ebook-reader-turn--overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  background: var(--s-color-bg-body, var(--main-surface-primary, #fff));
+/* ====== 豆包：inline 挂载（append-in-scroller-content） ======
+   reader 作为普通流子元素挂到虚拟列表的 scroller_content 中，
+   一个占位 spacer 兄弟节点让 reader 出现在所有虚拟消息之后。
+   用户可以在同一滚动区往上滑看到历史消息。 */
+.ebook-reader-doubao-spacer {
+  width: 100%;
+  pointer-events: none;
+}
+.ebook-reader-turn--doubao-inline {
+  position: relative;
+  width: 100%;
+  padding: 12px 24px 24px;
+  background: transparent;
   color: var(--s-color-text-primary, var(--text-primary, #1f2328));
-  overflow-y: auto;
-  padding: 0 24px;
+  box-sizing: border-box;
 }
 
+/* 用来隐藏原虚拟列表（保留兼容，overlay 模式仍可用） */
 .ebook-reader-native-hidden {
   display: none !important;
 }
 
-/* Doubao 主题（浅色）下：ChatGPT 的 CSS 变量不存在，覆盖为豆包色板 */
-.ebook-reader-turn--overlay .ebook-divider span,
-.ebook-reader-turn--overlay .ebook-page-header {
+/* 豆包主题（浅色）下：ChatGPT 的 CSS 变量不存在，覆盖为豆包色板 */
+.ebook-reader-turn--doubao-inline .ebook-divider span,
+.ebook-reader-turn--doubao-inline .ebook-page-header {
   color: var(--s-color-text-secondary, rgba(0, 0, 0, 0.65));
 }
-.ebook-reader-turn--overlay .ebook-message-content {
+.ebook-reader-turn--doubao-inline .ebook-message-content {
   color: var(--s-color-text-primary, #1f2328);
 }
-.ebook-reader-turn--overlay .ebook-message-wrapper {
+.ebook-reader-turn--doubao-inline .ebook-message-wrapper {
   border-bottom: 1px solid var(--s-color-border-primary, rgba(0, 0, 0, 0.08));
 }
-.ebook-reader-turn--overlay .ebook-message-content blockquote {
+.ebook-reader-turn--doubao-inline .ebook-message-content blockquote {
   border-left-color: var(--s-color-border-primary, rgba(0, 0, 0, 0.2));
   color: var(--s-color-text-secondary, rgba(0, 0, 0, 0.65));
 }
-.ebook-reader-turn--overlay .ebook-message-content hr {
+.ebook-reader-turn--doubao-inline .ebook-message-content hr {
   border-top-color: var(--s-color-border-primary, rgba(0, 0, 0, 0.12));
 }
-.ebook-reader-turn--overlay .ebook-nav-hint {
+.ebook-reader-turn--doubao-inline .ebook-nav-hint {
   color: var(--s-color-text-secondary, rgba(0, 0, 0, 0.65));
   border-top-color: var(--s-color-border-primary, rgba(0, 0, 0, 0.12));
 }
-.ebook-reader-turn--overlay .ebook-divider::before,
-.ebook-reader-turn--overlay .ebook-divider::after {
+.ebook-reader-turn--doubao-inline .ebook-divider::before,
+.ebook-reader-turn--doubao-inline .ebook-divider::after {
   background: linear-gradient(to right, transparent, var(--s-color-border-primary, rgba(0, 0, 0, 0.15)), transparent);
 }
 
