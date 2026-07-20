@@ -107,14 +107,8 @@
   const progress = await ReadingProgress.get();
   if (progress && progress.bookId) {
     try {
-      const resp = await new Promise(resolve => {
-        chrome.runtime.sendMessage(
-          { type: 'GET_BOOK_FOR_CONTENT', bookId: progress.bookId },
-          resolve
-        );
-      });
-      if (resp && resp.success && resp.book) {
-        const book = resp.book;
+      const book = await EbookDB.getBook(progress.bookId);
+      if (book) {
         Navigator.setBook(book);
         Navigator.setBatchIndex(progress.batchIndex || 0);
         if (settings.enabled) {
@@ -140,21 +134,20 @@
     try {
       switch (message.type) {
         case 'LOAD_BOOK': {
-          const resp = await new Promise(resolve => {
-            chrome.runtime.sendMessage(
-              { type: 'GET_BOOK_FOR_CONTENT', bookId: message.bookId },
-              resolve
-            );
-          });
-          if (resp && resp.success && resp.book) {
-            Navigator.setBook(resp.book);
-            Navigator.setBatchIndex(0);
-            if (settings.enabled) {
-              Navigator.renderCurrent({ type: 'open-reader' });
+          try {
+            const book = await EbookDB.getBook(message.bookId);
+            if (book) {
+              Navigator.setBook(book);
+              Navigator.setBatchIndex(0);
+              if (settings.enabled) {
+                Navigator.renderCurrent({ type: 'open-reader' });
+              }
+              sendResponse({ success: true });
+            } else {
+              sendResponse({ success: false, error: '书籍未找到' });
             }
-            sendResponse({ success: true });
-          } else {
-            sendResponse({ success: false, error: '书籍未找到' });
+          } catch (e) {
+            sendResponse({ success: false, error: e.message });
           }
           break;
         }
@@ -196,29 +189,25 @@
         }
 
         case 'REPARSE_BOOK': {
-          const rResp = await new Promise(resolve => {
-            chrome.runtime.sendMessage(
-              { type: 'GET_BOOK_FOR_CONTENT', bookId: message.bookId },
-              resolve
-            );
-          });
-          if (rResp && rResp.success && rResp.book && rResp.book.rawText) {
-            const rBook = rResp.book;
-            rBook.pages = EbookParser.splitIntoPages(rBook, message.charsPerPage);
-            rBook.totalPages = rBook.pages.length;
-            rBook.parserVersion = EbookParser.PARSER_VERSION || rBook.parserVersion;
-            await Bookmarks.reindex(rBook.id, rBook.pageIndexByLocId);
-            await new Promise(resolve => {
-              chrome.runtime.sendMessage({ type: 'DB_SAVE_BOOK', book: rBook }, resolve);
-            });
-            Navigator.setBook(rBook);
-            Navigator.setBatchIndex(0);
-            if (settings.enabled) {
-              Navigator.renderCurrent({ type: 'batch-start' });
+          try {
+            const rBook = await EbookDB.getBook(message.bookId);
+            if (rBook && rBook.rawText) {
+              rBook.pages = EbookParser.splitIntoPages(rBook, message.charsPerPage);
+              rBook.totalPages = rBook.pages.length;
+              rBook.parserVersion = EbookParser.PARSER_VERSION || rBook.parserVersion;
+              await Bookmarks.reindex(rBook.id, rBook.pageIndexByLocId);
+              await EbookDB.saveBook(rBook);
+              Navigator.setBook(rBook);
+              Navigator.setBatchIndex(0);
+              if (settings.enabled) {
+                Navigator.renderCurrent({ type: 'batch-start' });
+              }
+              sendResponse({ success: true, totalPages: rBook.totalPages });
+            } else {
+              sendResponse({ success: false, error: '书籍数据不完整' });
             }
-            sendResponse({ success: true, totalPages: rBook.totalPages });
-          } else {
-            sendResponse({ success: false, error: '书籍数据不完整' });
+          } catch (e) {
+            sendResponse({ success: false, error: e.message });
           }
           break;
         }

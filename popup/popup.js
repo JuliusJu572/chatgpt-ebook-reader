@@ -3,6 +3,7 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('[eBook Reader Popup] DOMContentLoaded 开始');
   // ===== 标签页切换 =====
   const tabBtns = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
@@ -26,8 +27,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const uploadArea = document.getElementById('uploadArea');
   const fileInput = document.getElementById('fileInput');
 
-  uploadArea.addEventListener('click', () => fileInput.click());
-
   uploadArea.addEventListener('dragover', (e) => {
     e.preventDefault();
     uploadArea.classList.add('drag-over');
@@ -47,9 +46,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) handleFile(file);
+    fileInput.value = '';
   });
 
   async function handleFile(file) {
+    console.log('[eBook Reader Popup] handleFile 开始:', file.name, file.size);
     const validExts = ['.pdf', '.epub', '.txt'];
     const ext = '.' + file.name.split('.').pop().toLowerCase();
     if (!validExts.includes(ext)) {
@@ -62,11 +63,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       setProgress(30, '正在解析内容...');
+      console.log('[eBook Reader Popup] 开始解析...');
       const parsed = await EbookParser.parse(file);
+      console.log('[eBook Reader Popup] 解析完成, segments:', parsed.segments?.length);
 
       setProgress(60, '正在分页...');
       const currentSettings = await Settings.get();
       const pages = EbookParser.splitIntoPages(parsed, currentSettings.charsPerPage);
+      console.log('[eBook Reader Popup] 分页完成, pages:', pages.length);
 
       setProgress(80, '正在保存...');
       const book = {
@@ -83,7 +87,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         totalChars: parsed.totalChars
       };
 
+      console.log('[eBook Reader Popup] 开始保存, isExtensionContext:', location.origin);
       const bookId = await EbookDB.saveBook(book);
+      console.log('[eBook Reader Popup] 保存成功, bookId:', bookId);
 
       setProgress(100, `✅ 解析完成！共 ${pages.length} 页`);
       setStatus(`已上传: ${parsed.title}`);
@@ -104,7 +110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }, 1500);
 
     } catch (err) {
-      console.error('解析失败:', err);
+      console.error('[eBook Reader Popup] 解析/保存失败:', err);
       setProgress(0, `❌ 解析失败: ${err.message}`);
       setStatus('解析失败');
     }
@@ -113,7 +119,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ===== 书架功能 =====
   async function loadBookshelf() {
     const bookshelf = document.getElementById('bookshelf');
-    const books = await EbookDB.getAllBooks();
+    console.log('[eBook Reader Popup] loadBookshelf 开始');
+    let books = [];
+    try {
+      books = await EbookDB.getAllBooks();
+      console.log('[eBook Reader Popup] 获取书籍列表:', books.length, '本');
+    } catch (e) {
+      console.error('[eBook Reader Popup] 获取书籍列表失败:', e);
+      bookshelf.innerHTML = '<p class="empty-hint">加载书架失败</p>';
+      return;
+    }
     const progress = await ReadingProgress.get();
 
     if (books.length === 0) {
@@ -222,7 +237,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 通过 service worker 转发，确保消息可靠送达
     chrome.runtime.sendMessage(message, (response) => {
       if (chrome.runtime.lastError) {
-        setStatus('⚠️ 请先打开 ChatGPT 或 豆包 页面');
+        setStatus('⚠️ 请先打开 ChatGPT / 豆包 / Gemini 页面');
         console.warn('消息发送失败:', chrome.runtime.lastError.message);
       } else if (response && response.success === false) {
         setStatus(`⚠️ ${response.error || '操作失败'}`);
@@ -267,8 +282,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 初始加载书架
+  console.log('[eBook Reader Popup] 初始加载书架...');
   await loadBookshelf();
   await loadBookmarks();
+  console.log('[eBook Reader Popup] 初始化完成');
 
   async function loadBookmarks() {
     const section = document.getElementById('bookmarksSection');

@@ -41,6 +41,9 @@ const ReaderMountManager = (() => {
       } else if (strategy === 'append-in-scroller-content') {
         turn.classList.add('ebook-reader-turn--doubao-inline');
       }
+      if (profile.name === 'gemini') {
+        turn.classList.add('ebook-reader-turn--gemini');
+      }
 
       const attached = attachTurn(turn, strategy);
       if (!attached) {

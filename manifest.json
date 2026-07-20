@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "ChatGPT & 豆包 eBook Reader",
-  "version": "1.1.0",
-  "description": "在 ChatGPT / 豆包 界面中阅读电子书，内容以对话回复样式渲染",
+  "name": "ChatGPT & 豆包 & Gemini eBook Reader",
+  "version": "1.2.0",
+  "description": "在 ChatGPT / 豆包 / Gemini 界面中阅读电子书，内容以对话回复样式渲染",
   "permissions": [
     "storage",
     "activeTab",
@@ -11,7 +11,8 @@
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",
-    "https://www.doubao.com/*"
+    "https://www.doubao.com/*",
+    "https://gemini.google.com/*"
   ],
   "icons": {
     "16": "icons/icon16.png",
@@ -33,7 +34,8 @@
       "matches": [
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
-        "https://www.doubao.com/*"
+        "https://www.doubao.com/*",
+        "https://gemini.google.com/*"
       ],
       "js": [
         "lib/parser.js",
@@ -63,7 +65,8 @@
       "matches": [
         "https://chatgpt.com/*",
         "https://chat.openai.com/*",
-        "https://www.doubao.com/*"
+        "https://www.doubao.com/*",
+        "https://gemini.google.com/*"
       ]
     }
   ]

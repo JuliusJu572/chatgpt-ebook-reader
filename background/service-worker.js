@@ -70,6 +70,61 @@ async function dbDeleteBook(id) {
   });
 }
 
+// ===== 分块传输（Port）=====
+const CHUNK_SIZE = 4 * 1024 * 1024;
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'book-transfer') {
+    handleBookTransfer(port);
+  } else if (port.name === 'book-save') {
+    handleBookSave(port);
+  }
+});
+
+function handleBookTransfer(port) {
+  port.onMessage.addListener(async (msg) => {
+    if (msg.type !== 'GET_BOOK') return;
+    try {
+      const book = await dbGetBook(msg.bookId);
+      if (!book) {
+        port.postMessage({ type: 'ERROR', error: '书籍未找到' });
+        return;
+      }
+      const json = JSON.stringify(book);
+      for (let i = 0; i < json.length; i += CHUNK_SIZE) {
+        port.postMessage({ type: 'CHUNK', data: json.slice(i, i + CHUNK_SIZE) });
+      }
+      port.postMessage({ type: 'DONE' });
+    } catch (e) {
+      port.postMessage({ type: 'ERROR', error: e.message });
+    }
+  });
+}
+
+function handleBookSave(port) {
+  let chunks = [];
+  let bookId = null;
+  port.onMessage.addListener(async (msg) => {
+    if (msg.type === 'SAVE_START') {
+      bookId = msg.id;
+      chunks = [];
+    } else if (msg.type === 'CHUNK') {
+      chunks.push(msg.data);
+    } else if (msg.type === 'SAVE_END') {
+      try {
+        const json = chunks.join('');
+        const book = JSON.parse(json);
+        book.id = bookId || book.id;
+        await dbSaveBook(book);
+        port.postMessage({ type: 'SAVE_OK', bookId: book.id });
+      } catch (e) {
+        port.postMessage({ type: 'ERROR', error: e.message });
+      }
+      chunks = [];
+    }
+  });
+}
+
 // ===== 安装事件 =====
 function isMacOS() {
   const platform = navigator.userAgentData?.platform || navigator.platform || '';
@@ -158,7 +213,8 @@ async function forwardToContentScript(message) {
   const SUPPORTED_URLS = [
     'https://chatgpt.com/*',
     'https://chat.openai.com/*',
-    'https://www.doubao.com/*'
+    'https://www.doubao.com/*',
+    'https://gemini.google.com/*'
   ];
   const activeTabs = await chrome.tabs.query({
     active: true,
@@ -169,7 +225,7 @@ async function forwardToContentScript(message) {
     url: SUPPORTED_URLS
   });
   if (tabs.length === 0) {
-    return { success: false, error: '未找到 ChatGPT / 豆包 标签页' };
+    return { success: false, error: '未找到 ChatGPT / 豆包 / Gemini 标签页' };
   }
   return new Promise((resolve) => {
     chrome.tabs.sendMessage(tabs[0].id, message, (response) => {

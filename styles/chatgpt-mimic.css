@@ -380,3 +380,64 @@
   50%  { background-color: rgba(16, 163, 127, 0.1); }
   100% { background-color: transparent; }
 }
+
+/* ====== Gemini 适配 ====== */
+.ebook-reader-turn--gemini {
+  font-family: "Google Sans", "Helvetica Neue", Arial, sans-serif;
+  color: var(--gem-sys-color--on-surface, #1f1f1f);
+  padding: 0 16px;
+}
+
+.ebook-reader-turn--gemini .ebook-message-content {
+  font-family: "Google Sans", "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--gem-sys-color--on-surface, #1f1f1f);
+}
+
+.ebook-reader-turn--gemini .ebook-message-wrapper {
+  border-bottom-color: var(--gem-sys-color--outline-variant, rgba(0, 0, 0, 0.08));
+}
+
+.ebook-reader-turn--gemini .ebook-page-header {
+  color: var(--gem-sys-color--on-surface-variant, #444746);
+}
+
+.ebook-reader-turn--gemini .ebook-divider span {
+  color: var(--gem-sys-color--on-surface-variant, #444746);
+}
+
+.ebook-reader-turn--gemini .ebook-divider::before,
+.ebook-reader-turn--gemini .ebook-divider::after {
+  background: linear-gradient(to right, transparent, var(--gem-sys-color--outline-variant, rgba(0, 0, 0, 0.12)), transparent);
+}
+
+.ebook-reader-turn--gemini .ebook-message-content blockquote {
+  border-left-color: var(--gem-sys-color--outline-variant, rgba(0, 0, 0, 0.2));
+  color: var(--gem-sys-color--on-surface-variant, #444746);
+}
+
+.ebook-reader-turn--gemini .ebook-message-content hr {
+  border-top-color: var(--gem-sys-color--outline-variant, rgba(0, 0, 0, 0.12));
+}
+
+.ebook-reader-turn--gemini .ebook-nav-hint {
+  color: var(--gem-sys-color--on-surface-variant, #444746);
+  border-top-color: var(--gem-sys-color--outline-variant, rgba(0, 0, 0, 0.12));
+}
+
+/* Gemini 暗色模式 */
+@media (prefers-color-scheme: dark) {
+  .ebook-reader-turn--gemini {
+    color: var(--gem-sys-color--on-surface, #e3e3e3);
+  }
+  .ebook-reader-turn--gemini .ebook-message-content {
+    color: var(--gem-sys-color--on-surface, #e3e3e3);
+  }
+  .ebook-reader-turn--gemini .ebook-page-header {
+    color: var(--gem-sys-color--on-surface-variant, #c4c7c5);
+  }
+  .ebook-reader-turn--gemini .ebook-divider span {
+    color: var(--gem-sys-color--on-surface-variant, #c4c7c5);
+  }
+}

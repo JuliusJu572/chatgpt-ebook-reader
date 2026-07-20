@@ -103,6 +103,7 @@ body {
 
 /* ====== Upload ====== */
 .upload-area {
+  position: relative;
   border: 2px dashed rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 40px 20px;

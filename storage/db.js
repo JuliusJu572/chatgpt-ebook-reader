@@ -5,8 +5,113 @@
  * - ReadingProgress: chrome.storage.local 直接访问
  */
 
+console.log('[eBook Reader] db.js 加载中...');
+
 const EbookDB = (() => {
-  // 所有 IndexedDB 操作通过 service worker 代理
+  const DB_NAME = 'chatgpt-ebook-reader';
+  const DB_VERSION = 1;
+  const STORE_NAME = 'ebooks';
+  const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB per chunk
+
+  // 判断当前是否在扩展 origin（popup / service worker 可直接访问 IndexedDB）
+  function isExtensionContext() {
+    return !!(chrome.runtime && chrome.runtime.getURL &&
+      location.origin === new URL(chrome.runtime.getURL('')).origin);
+  }
+
+  // ===== 直接 IndexedDB 访问（popup / service worker） =====
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = (e) => resolve(e.target.result);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  async function directSave(book) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(book);
+      tx.oncomplete = () => resolve(book.id);
+      tx.onerror = (e) => reject(e.target.error || new Error('IndexedDB 写入失败'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务中止'));
+    });
+  }
+
+  async function directGet(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const request = tx.objectStore(STORE_NAME).get(id);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = (e) => reject(e.target.error || new Error('IndexedDB 读取失败'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务中止'));
+    });
+  }
+
+  async function directGetAll() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const request = tx.objectStore(STORE_NAME).getAll();
+      request.onsuccess = () => {
+        const books = (request.result || []).map(b => ({
+          id: b.id, title: b.title, fileName: b.fileName,
+          totalPages: b.totalPages, totalChars: b.totalChars, uploadedAt: b.uploadedAt
+        }));
+        resolve(books);
+      };
+      request.onerror = (e) => reject(e.target.error || new Error('IndexedDB 读取失败'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务中止'));
+    });
+  }
+
+  async function directDelete(id) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => reject(e.target.error || new Error('IndexedDB 删除失败'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务中止'));
+    });
+  }
+
+  // ===== 分块传输（content script 通过 port 获取大数据） =====
+  function getBookChunked(bookId) {
+    return new Promise((resolve, reject) => {
+      const port = chrome.runtime.connect({ name: 'book-transfer' });
+      const chunks = [];
+      port.onMessage.addListener((msg) => {
+        if (msg.type === 'CHUNK') {
+          chunks.push(msg.data);
+        } else if (msg.type === 'DONE') {
+          port.disconnect();
+          try {
+            const json = chunks.join('');
+            resolve(JSON.parse(json));
+          } catch (e) {
+            reject(new Error('分块数据解析失败'));
+          }
+        } else if (msg.type === 'ERROR') {
+          port.disconnect();
+          reject(new Error(msg.error));
+        }
+      });
+      port.onDisconnect.addListener(() => {
+        if (chunks.length === 0) reject(new Error('连接断开'));
+      });
+      port.postMessage({ type: 'GET_BOOK', bookId });
+    });
+  }
+
   function sendMsg(msg) {
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage(msg, (response) => {
@@ -19,25 +124,69 @@ const EbookDB = (() => {
     });
   }
 
+  // ===== 公共 API =====
   async function saveBook(book) {
     book.id = book.id || `book_${Date.now()}`;
     book.uploadedAt = book.uploadedAt || new Date().toISOString();
-    const resp = await sendMsg({ type: 'DB_SAVE_BOOK', book });
-    if (!resp.success) throw new Error(resp.error);
-    return resp.bookId;
+    if (isExtensionContext()) {
+      await directSave(book);
+      return book.id;
+    }
+    // content script: 分块发送保存
+    const json = JSON.stringify(book);
+    if (json.length < CHUNK_SIZE) {
+      const resp = await sendMsg({ type: 'DB_SAVE_BOOK', book });
+      if (!resp.success) throw new Error(resp.error);
+      return resp.bookId;
+    }
+    return saveBookChunked(book, json);
+  }
+
+  function saveBookChunked(book, json) {
+    return new Promise((resolve, reject) => {
+      const port = chrome.runtime.connect({ name: 'book-save' });
+      port.onMessage.addListener((msg) => {
+        if (msg.type === 'SAVE_OK') {
+          port.disconnect();
+          resolve(msg.bookId);
+        } else if (msg.type === 'ERROR') {
+          port.disconnect();
+          reject(new Error(msg.error));
+        }
+      });
+      port.onDisconnect.addListener(() => {
+        reject(new Error('保存连接断开'));
+      });
+      // 发送元数据
+      port.postMessage({ type: 'SAVE_START', id: book.id });
+      // 分块发送
+      for (let i = 0; i < json.length; i += CHUNK_SIZE) {
+        port.postMessage({ type: 'CHUNK', data: json.slice(i, i + CHUNK_SIZE) });
+      }
+      port.postMessage({ type: 'SAVE_END' });
+    });
   }
 
   async function getBook(id) {
-    const resp = await sendMsg({ type: 'DB_GET_BOOK', bookId: id });
-    return resp.success ? resp.book : null;
+    if (isExtensionContext()) {
+      return directGet(id);
+    }
+    // content script: 使用分块传输获取大文件
+    return getBookChunked(id);
   }
 
   async function getAllBooks() {
+    if (isExtensionContext()) {
+      return directGetAll();
+    }
     const resp = await sendMsg({ type: 'DB_GET_ALL_BOOKS' });
     return resp.success ? resp.books : [];
   }
 
   async function deleteBook(id) {
+    if (isExtensionContext()) {
+      return directDelete(id);
+    }
     const resp = await sendMsg({ type: 'DB_DELETE_BOOK', bookId: id });
     if (!resp.success) throw new Error(resp.error);
   }

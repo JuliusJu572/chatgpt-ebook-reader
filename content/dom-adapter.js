@@ -1,5 +1,5 @@
 /**
- * DOM 适配层（ChatGPT / 豆包）
+ * DOM 适配层（ChatGPT / 豆包 / Gemini）
  * 根据 hostname 选择对应的 SiteProfile，集中处理页面结构定位，
  * 避免渲染逻辑误插到输入框或布局容器中。
  */
@@ -91,9 +91,34 @@ const ChatDomAdapter = (() => {
     }
   };
 
+  const GeminiProfile = {
+    name: 'gemini',
+    scrollSelectors: [
+      'infinite-scroller',
+      '.chat-history',
+      'main [class*="overflow-y-auto"]'
+    ],
+    composerSelector: '.input-area-container textarea, .input-area-container [contenteditable="true"], .ql-editor, rich-textarea .textarea',
+    composerWrapSelectors: ['.input-area-container', 'footer'],
+    turnSelectors: [
+      '.conversation-container',
+      'model-response',
+      'user-query'
+    ],
+    isTurnMatch(node) {
+      return node.matches('.conversation-container, model-response, user-query');
+    },
+    isRenderableTurn(el) {
+      return el.matches('.conversation-container, model-response, user-query')
+        && !!el.textContent.trim();
+    },
+    mountStrategy: 'sibling-after-last-turn'
+  };
+
   function detectProfile() {
     const host = location.hostname;
     if (host.includes('doubao.com')) return DoubaoProfile;
+    if (host.includes('gemini.google.com')) return GeminiProfile;
     return ChatGPTProfile;
   }
 
